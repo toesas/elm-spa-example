@@ -85,7 +85,7 @@ init maybeToken feedSources =
 
 viewArticles : Time.Zone -> Model -> List (Html Msg)
 viewArticles timeZone (Model { activePage, feed, feedSources }) =
-    List.map (Views.Article.view ToggleFavorite timeZone) feed.articles
+    List.map (Views.Article.view ClickedFavorite timeZone) feed.articles
         ++ [ pagination activePage feed (FeedSources.selected feedSources) ]
 
 
@@ -93,7 +93,7 @@ viewFeedSources : Model -> Html Msg
 viewFeedSources (Model { feedSources, isLoading, errors }) =
     let
         errorsHtml =
-            Errors.view DismissErrors errors
+            Errors.view ClickedDismissErrors errors
 
         spinnerHtml =
             if isLoading then
@@ -116,7 +116,7 @@ viewFeedSource isSelected source =
     li [ class "nav-item" ]
         [ a
             [ classList [ ( "nav-link", True ), ( "active", isSelected ) ]
-            , onClick (SelectFeedSource source)
+            , onClick (ClickedFeedSource source)
 
             -- The RealWorld CSS requires an href to work properly.
             , href ""
@@ -133,7 +133,7 @@ selectTag maybeAuthToken tagName =
     in
     source
         |> fetch maybeAuthToken 1
-        |> Task.attempt (FeedLoadCompleted source)
+        |> Task.attempt (CompletedFeedLoad source)
 
 
 sourceName : Source -> String
@@ -197,7 +197,7 @@ pageLink page isActive =
     li [ classList [ ( "page-item", True ), ( "active", isActive ) ] ]
         [ a
             [ class "page-link"
-            , onClick (SelectPage page)
+            , onClick (ClickedFeedPage page)
 
             -- The RealWorld CSS requires an href to work properly.
             , href ""
@@ -211,12 +211,12 @@ pageLink page isActive =
 
 
 type Msg
-    = DismissErrors
-    | SelectFeedSource Source
-    | FeedLoadCompleted Source (Result Http.Error ( Int, Feed ))
-    | ToggleFavorite (Article Preview)
-    | FavoriteCompleted (Result Http.Error (Article Preview))
-    | SelectPage Int
+    = ClickedDismissErrors
+    | ClickedFavorite (Article Preview)
+    | ClickedFeedPage Int
+    | ClickedFeedSource Source
+    | CompletedFavorite (Result Http.Error (Article Preview))
+    | CompletedFeedLoad Source (Result Http.Error ( Int, Feed ))
 
 
 update : Maybe AuthToken -> Msg -> Model -> ( Model, Cmd Msg )
@@ -228,16 +228,16 @@ update maybeToken msg (Model internalModel) =
 updateInternal : Maybe AuthToken -> Msg -> InternalModel -> ( InternalModel, Cmd Msg )
 updateInternal maybeToken msg model =
     case msg of
-        DismissErrors ->
+        ClickedDismissErrors ->
             ( { model | errors = [] }, Cmd.none )
 
-        SelectFeedSource source ->
+        ClickedFeedSource source ->
             source
                 |> fetch maybeToken 1
-                |> Task.attempt (FeedLoadCompleted source)
+                |> Task.attempt (CompletedFeedLoad source)
                 |> Tuple.pair { model | isLoading = True }
 
-        FeedLoadCompleted source (Ok ( activePage, feed )) ->
+        CompletedFeedLoad source (Ok ( activePage, feed )) ->
             ( { model
                 | feed = feed
                 , feedSources = FeedSources.select source model.feedSources
@@ -247,7 +247,7 @@ updateInternal maybeToken msg model =
             , Cmd.none
             )
 
-        FeedLoadCompleted _ (Err error) ->
+        CompletedFeedLoad _ (Err error) ->
             ( { model
                 | errors = model.errors ++ [ "Server error while trying to load feed" ]
                 , isLoading = False
@@ -255,7 +255,7 @@ updateInternal maybeToken msg model =
             , Cmd.none
             )
 
-        ToggleFavorite article ->
+        ClickedFavorite article ->
             case maybeToken of
                 Nothing ->
                     ( { model | errors = model.errors ++ [ "You are currently signed out. You must sign in to favorite articles." ] }
@@ -264,10 +264,10 @@ updateInternal maybeToken msg model =
 
                 Just token ->
                     Article.toggleFavorite article token
-                        |> Http.send FavoriteCompleted
+                        |> Http.send CompletedFavorite
                         |> Tuple.pair model
 
-        FavoriteCompleted (Ok article) ->
+        CompletedFavorite (Ok article) ->
             let
                 feed =
                     model.feed
@@ -277,12 +277,12 @@ updateInternal maybeToken msg model =
             in
             ( { model | feed = newFeed }, Cmd.none )
 
-        FavoriteCompleted (Err error) ->
+        CompletedFavorite (Err error) ->
             ( { model | errors = model.errors ++ [ "Server error while trying to favorite article." ] }
             , Cmd.none
             )
 
-        SelectPage page ->
+        ClickedFeedPage page ->
             let
                 source =
                     FeedSources.selected model.feedSources
@@ -290,7 +290,7 @@ updateInternal maybeToken msg model =
             source
                 |> fetch maybeToken page
                 |> Task.andThen (\feed -> Task.map (\_ -> feed) scrollToTop)
-                |> Task.attempt (FeedLoadCompleted source)
+                |> Task.attempt (CompletedFeedLoad source)
                 |> Tuple.pair model
 
 

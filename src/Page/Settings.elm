@@ -48,13 +48,13 @@ init me =
 
 view : Session -> Model -> { title : String, content : Html Msg }
 view session model =
-    { title = "Settings"
+    { title = "Enteredtings"
     , content =
         div [ class "settings-page" ]
             [ div [ class "container page" ]
                 [ div [ class "row" ]
                     [ div [ class "col-md-6 offset-md-3 col-xs-12" ]
-                        [ h1 [ class "text-xs-center" ] [ text "Your Settings" ]
+                        [ h1 [ class "text-xs-center" ] [ text "Your Enteredtings" ]
                         , Form.viewErrors model.errors
                         , viewForm model
                         ]
@@ -66,19 +66,19 @@ view session model =
 
 viewForm : Model -> Html Msg
 viewForm model =
-    Html.form [ onSubmit SubmitForm ]
+    Html.form [ onSubmit SubmittedForm ]
         [ fieldset []
             [ Form.input
                 [ placeholder "URL of profile picture"
                 , value (Maybe.withDefault "" model.image)
-                , onInput SetImage
+                , onInput EnteredImage
                 ]
                 []
             , Form.input
                 [ class "form-control-lg"
                 , placeholder "Username"
                 , value model.username
-                , onInput SetUsername
+                , onInput EnteredUsername
                 ]
                 []
             , Form.textarea
@@ -86,26 +86,26 @@ viewForm model =
                 , placeholder "Short bio about you"
                 , attribute "rows" "8"
                 , value model.bio
-                , onInput SetBio
+                , onInput EnteredBio
                 ]
                 []
             , Form.input
                 [ class "form-control-lg"
                 , placeholder "Email"
                 , value model.email
-                , onInput SetEmail
+                , onInput EnteredEmail
                 ]
                 []
             , Form.password
                 [ class "form-control-lg"
                 , placeholder "Password"
                 , value (Maybe.withDefault "" model.password)
-                , onInput SetPassword
+                , onInput EnteredPassword
                 ]
                 []
             , button
                 [ class "btn btn-lg btn-primary pull-xs-right" ]
-                [ text "Update Settings" ]
+                [ text "Update Enteredtings" ]
             ]
         ]
 
@@ -115,28 +115,28 @@ viewForm model =
 
 
 type Msg
-    = SubmitForm
-    | SetEmail String
-    | SetUsername String
-    | SetPassword String
-    | SetBio String
-    | SetImage String
-    | SaveCompleted (Result Http.Error Me)
+    = SubmittedForm
+    | EnteredEmail String
+    | EnteredUsername String
+    | EnteredPassword String
+    | EnteredBio String
+    | EnteredImage String
+    | CompletedSave (Result Http.Error Me)
 
 
 type ExternalMsg
     = NoOp
-    | SetMe Me
+    | ChangedMe Me
 
 
 update : Nav.Key -> AuthToken -> Msg -> Model -> ( ( Model, Cmd Msg ), ExternalMsg )
 update navKey authToken msg model =
     case msg of
-        SubmitForm ->
+        SubmittedForm ->
             case validate modelValidator model of
                 [] ->
                     ( Me.edit authToken model
-                        |> Http.send SaveCompleted
+                        |> Http.send CompletedSave
                         |> Tuple.pair { model | errors = [] }
                     , NoOp
                     )
@@ -148,21 +148,21 @@ update navKey authToken msg model =
                     , NoOp
                     )
 
-        SetEmail email ->
+        EnteredEmail email ->
             ( ( { model | email = email }
               , Cmd.none
               )
             , NoOp
             )
 
-        SetUsername username ->
+        EnteredUsername username ->
             ( ( { model | username = username }
               , Cmd.none
               )
             , NoOp
             )
 
-        SetPassword passwordStr ->
+        EnteredPassword passwordStr ->
             let
                 password =
                     if String.isEmpty passwordStr then
@@ -177,14 +177,14 @@ update navKey authToken msg model =
             , NoOp
             )
 
-        SetBio bio ->
+        EnteredBio bio ->
             ( ( { model | bio = bio }
               , Cmd.none
               )
             , NoOp
             )
 
-        SetImage imageStr ->
+        EnteredImage imageStr ->
             let
                 image =
                     if String.isEmpty imageStr then
@@ -199,7 +199,7 @@ update navKey authToken msg model =
             , NoOp
             )
 
-        SaveCompleted (Err error) ->
+        CompletedSave (Err error) ->
             let
                 errorMessages =
                     case error of
@@ -221,11 +221,11 @@ update navKey authToken msg model =
             , NoOp
             )
 
-        SaveCompleted (Ok me) ->
+        CompletedSave (Ok me) ->
             ( ( model
               , Cmd.batch [ Session.store me authToken, Route.replaceUrl navKey Route.Home ]
               )
-            , SetMe me
+            , ChangedMe me
             )
 
 

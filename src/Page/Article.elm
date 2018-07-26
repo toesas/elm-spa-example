@@ -137,7 +137,7 @@ viewBanner timeZone errors article author maybeMe =
                     ]
                 ]
                     ++ buttons
-            , Views.Errors.view DismissErrors errors
+            , Views.Errors.view ClickedDismissErrors errors
             ]
         ]
 
@@ -154,13 +154,13 @@ viewAddComment postingDisabled maybeMe =
                 ]
 
         Just me ->
-            Html.form [ class "card comment-form", onSubmit PostComment ]
+            Html.form [ class "card comment-form", onSubmit ClickedPostComment ]
                 [ div [ class "card-block" ]
                     [ textarea
                         [ class "form-control"
                         , placeholder "Write a comment..."
                         , attribute "rows" "3"
-                        , onInput SetCommentText
+                        , onInput EnteredCommentText
                         ]
                         []
                     ]
@@ -224,7 +224,7 @@ viewComment timeZone maybeMe comment =
             , if isMine then
                 span
                     [ class "mod-options"
-                    , onClick (DeleteComment (Comment.id comment))
+                    , onClick (ClickedDeleteComment (Comment.id comment))
                     ]
                     [ i [ class "ion-trash-a" ] [] ]
 
@@ -239,18 +239,19 @@ viewComment timeZone maybeMe comment =
 
 
 type Msg
-    = DismissErrors
-    | ToggleFavorite
-    | FavoriteCompleted (Result Http.Error (Article Full))
-    | ToggleFollow
-    | FollowCompleted (Result Http.Error Profile)
-    | SetCommentText String
-    | DeleteComment CommentId
-    | CommentDeleted CommentId (Result Http.Error ())
-    | PostComment
-    | CommentPosted (Result Http.Error Comment)
-    | DeleteArticle
-    | ArticleDeleted (Result Http.Error ())
+    = ClickedDeleteArticle
+    | ClickedDeleteComment CommentId
+    | ClickedDismissErrors
+    | ClickedFavorite
+    | ClickedFollow
+    | ClickedPostComment
+    | EnteredCommentText String
+      -- HTTP
+    | CompletedDeleteArticle (Result Http.Error ())
+    | CompletedDeleteComment CommentId (Result Http.Error ())
+    | CompletedFavorite (Result Http.Error (Article Full))
+    | CompletedFollow (Result Http.Error Profile)
+    | CompletedPostComment (Result Http.Error Comment)
 
 
 update : Nav.Key -> Session -> Msg -> Model -> ( Model, Cmd Msg )
@@ -266,54 +267,54 @@ update navKey session msg model =
             Article.body article
     in
     case msg of
-        DismissErrors ->
+        ClickedDismissErrors ->
             ( { model | errors = [] }, Cmd.none )
 
-        ToggleFavorite ->
+        ClickedFavorite ->
             let
                 cmdFromAuth authToken =
                     Article.toggleFavorite article authToken
                         |> Http.toTask
                         |> Task.map (Article.fromPreview oldBody)
-                        |> Task.attempt FavoriteCompleted
+                        |> Task.attempt CompletedFavorite
             in
             session
                 |> Session.attempt "favorite" cmdFromAuth
                 |> Util.updateFromResult model Cmd.none
 
-        FavoriteCompleted (Ok newArticle) ->
+        CompletedFavorite (Ok newArticle) ->
             ( { model | article = newArticle }, Cmd.none )
 
-        FavoriteCompleted (Err error) ->
+        CompletedFavorite (Err error) ->
             -- In a serious production application, we would log the error to
             -- a logging service so we could investigate later.
             ( { model | errors = model.errors ++ [ "There was a server error trying to record your Favorite. Sorry!" ] }
             , Cmd.none
             )
 
-        ToggleFollow ->
+        ClickedFollow ->
             let
                 cmdFromAuth authToken =
                     authToken
                         |> Profile.toggleFollow
                             (Profile.username author)
                             (Profile.following author)
-                        |> Http.send FollowCompleted
+                        |> Http.send CompletedFollow
             in
             session
                 |> Session.attempt "follow" cmdFromAuth
                 |> Util.updateFromResult model Cmd.none
 
-        FollowCompleted (Ok newAuthor) ->
+        CompletedFollow (Ok newAuthor) ->
             ( { model | article = Article.followAuthor (Profile.following newAuthor) article }, Cmd.none )
 
-        FollowCompleted (Err error) ->
+        CompletedFollow (Err error) ->
             ( { model | errors = "Unable to follow user." :: model.errors }, Cmd.none )
 
-        SetCommentText commentText ->
+        EnteredCommentText commentText ->
             ( { model | commentText = commentText }, Cmd.none )
 
-        PostComment ->
+        ClickedPostComment ->
             let
                 comment =
                     model.commentText
@@ -326,13 +327,13 @@ update navKey session msg model =
                     cmdFromAuth authToken =
                         authToken
                             |> Comment.post (Article.slug model.article) comment
-                            |> Http.send CommentPosted
+                            |> Http.send CompletedPostComment
                 in
                 session
                     |> Session.attempt "post a comment" cmdFromAuth
                     |> Util.updateFromResult { model | commentInFlight = True } Cmd.none
 
-        CommentPosted (Ok comment) ->
+        CompletedPostComment (Ok comment) ->
             ( { model
                 | commentInFlight = False
                 , comments = comment :: model.comments
@@ -340,47 +341,47 @@ update navKey session msg model =
             , Cmd.none
             )
 
-        CommentPosted (Err error) ->
+        CompletedPostComment (Err error) ->
             ( { model | errors = model.errors ++ [ "Server error while trying to post comment." ] }
             , Cmd.none
             )
 
-        DeleteComment id ->
+        ClickedDeleteComment id ->
             let
                 cmdFromAuth authToken =
                     authToken
                         |> Comment.delete (Article.slug model.article) id
-                        |> Http.send (CommentDeleted id)
+                        |> Http.send (CompletedDeleteComment id)
             in
             session
                 |> Session.attempt "delete comments" cmdFromAuth
                 |> Util.updateFromResult model Cmd.none
 
-        CommentDeleted id (Ok ()) ->
+        CompletedDeleteComment id (Ok ()) ->
             ( { model | comments = withoutComment id model.comments }
             , Cmd.none
             )
 
-        CommentDeleted id (Err error) ->
+        CompletedDeleteComment id (Err error) ->
             ( { model | errors = model.errors ++ [ "Server error while trying to delete comment." ] }
             , Cmd.none
             )
 
-        DeleteArticle ->
+        ClickedDeleteArticle ->
             let
                 cmdFromAuth authToken =
                     authToken
                         |> Article.delete (Article.slug model.article)
-                        |> Http.send ArticleDeleted
+                        |> Http.send CompletedDeleteArticle
             in
             session
                 |> Session.attempt "delete articles" cmdFromAuth
                 |> Util.updateFromResult model Cmd.none
 
-        ArticleDeleted (Ok ()) ->
+        CompletedDeleteArticle (Ok ()) ->
             ( model, Route.replaceUrl navKey Route.Home )
 
-        ArticleDeleted (Err error) ->
+        CompletedDeleteArticle (Err error) ->
             ( { model | errors = model.errors ++ [ "Server error while trying to delete article." ] }
             , Cmd.none
             )
@@ -401,12 +402,12 @@ favoriteButton article =
         favoriteText =
             " Favorite Article (" ++ String.fromInt (Article.favoritesCount article) ++ ")"
     in
-    Favorite.button (\_ -> ToggleFavorite) article [] [ text favoriteText ]
+    Favorite.button (\_ -> ClickedFavorite) article [] [ text favoriteText ]
 
 
 deleteButton : Article a -> Html Msg
 deleteButton article =
-    button [ class "btn btn-outline-danger btn-sm", onClick DeleteArticle ]
+    button [ class "btn btn-outline-danger btn-sm", onClick ClickedDeleteArticle ]
         [ i [ class "ion-trash-a" ] [], text " Delete Article" ]
 
 
@@ -418,6 +419,6 @@ editButton article =
 
 followButton : Profile -> Html Msg
 followButton author =
-    Follow.button (\_ -> ToggleFollow)
+    Follow.button (\_ -> ClickedFollow)
         (Profile.following author)
         (Profile.username author)

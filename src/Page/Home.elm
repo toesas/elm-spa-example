@@ -92,8 +92,8 @@ viewBanner =
 viewFeed : Time.Zone -> Feed.Model -> List (Html Msg)
 viewFeed timeZone feed =
     div [ class "feed-toggle" ]
-        [ Feed.viewFeedSources feed |> Html.map FeedMsg ]
-        :: (Feed.viewArticles timeZone feed |> List.map (Html.map FeedMsg))
+        [ Feed.viewFeedSources feed |> Html.map GotFeedMsg ]
+        :: (Feed.viewArticles timeZone feed |> List.map (Html.map GotFeedMsg))
 
 
 viewTags : List Tag -> Html Msg
@@ -105,7 +105,7 @@ viewTag : Tag -> Html Msg
 viewTag tagName =
     a
         [ class "tag-pill tag-default"
-        , onClick (SelectTag tagName)
+        , onClick (ClickedTag tagName)
 
         -- The RealWorld CSS requires an href to work properly.
         , href ""
@@ -118,23 +118,23 @@ viewTag tagName =
 
 
 type Msg
-    = FeedMsg Feed.Msg
-    | SelectTag Tag
+    = ClickedTag Tag
+    | GotFeedMsg Feed.Msg
 
 
 update : Maybe AuthToken -> Msg -> Model -> ( Model, Cmd Msg )
 update maybeToken msg model =
     case msg of
-        FeedMsg subMsg ->
+        GotFeedMsg subMsg ->
             let
                 ( newFeed, subCmd ) =
                     Feed.update maybeToken subMsg model.feed
             in
-            ( { model | feed = newFeed }, Cmd.map FeedMsg subCmd )
+            ( { model | feed = newFeed }, Cmd.map GotFeedMsg subCmd )
 
-        SelectTag tagName ->
+        ClickedTag tagName ->
             let
                 subCmd =
                     Feed.selectTag maybeToken tagName
             in
-            ( model, Cmd.map FeedMsg subCmd )
+            ( model, Cmd.map GotFeedMsg subCmd )

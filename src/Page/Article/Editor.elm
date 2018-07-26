@@ -98,31 +98,31 @@ viewForm model =
             else
                 "Publish Article"
     in
-    Html.form [ onSubmit Save ]
+    Html.form [ onSubmit ClickedSave ]
         [ fieldset []
             [ Form.input
                 [ class "form-control-lg"
                 , placeholder "Article Title"
-                , onInput SetTitle
+                , onInput EnteredTitle
                 , value model.title
                 ]
                 []
             , Form.input
                 [ placeholder "What's this article about?"
-                , onInput SetDescription
+                , onInput EnteredDescription
                 , value model.description
                 ]
                 []
             , Form.textarea
                 [ placeholder "Write your article (in markdown)"
                 , attribute "rows" "8"
-                , onInput SetBody
+                , onInput EnteredBody
                 , value model.body
                 ]
                 []
             , Form.input
                 [ placeholder "Enter tags"
-                , onInput SetTags
+                , onInput EnteredTags
                 , value (String.join " " model.tags)
                 ]
                 []
@@ -137,55 +137,55 @@ viewForm model =
 
 
 type Msg
-    = Save
-    | SetTitle String
-    | SetDescription String
-    | SetTags String
-    | SetBody String
-    | CreateCompleted (Result Http.Error (Article Full))
-    | EditCompleted (Result Http.Error (Article Full))
+    = ClickedSave
+    | EnteredBody String
+    | EnteredDescription String
+    | EnteredTags String
+    | EnteredTitle String
+    | CompletedCreate (Result Http.Error (Article Full))
+    | CompletedEdit (Result Http.Error (Article Full))
 
 
 update : AuthToken -> Nav.Key -> Msg -> Model -> ( Model, Cmd Msg )
 update token navKey msg model =
     case msg of
-        Save ->
+        ClickedSave ->
             case validate modelValidator model of
                 [] ->
                     case model.editingArticle of
                         Nothing ->
                             token
                                 |> Article.create model
-                                |> Http.send CreateCompleted
+                                |> Http.send CompletedCreate
                                 |> Tuple.pair { model | errors = [], isSaving = True }
 
                         Just slug ->
                             token
                                 |> Article.update slug model
-                                |> Http.send EditCompleted
+                                |> Http.send CompletedEdit
                                 |> Tuple.pair { model | errors = [], isSaving = True }
 
                 errors ->
                     ( { model | errors = errors }, Cmd.none )
 
-        SetTitle title ->
+        EnteredTitle title ->
             ( { model | title = title }, Cmd.none )
 
-        SetDescription description ->
+        EnteredDescription description ->
             ( { model | description = description }, Cmd.none )
 
-        SetTags tags ->
+        EnteredTags tags ->
             ( { model | tags = tagsFromString tags }, Cmd.none )
 
-        SetBody body ->
+        EnteredBody body ->
             ( { model | body = body }, Cmd.none )
 
-        CreateCompleted (Ok article) ->
+        CompletedCreate (Ok article) ->
             Route.Article (Article.slug article)
                 |> Route.replaceUrl navKey
                 |> Tuple.pair model
 
-        CreateCompleted (Err error) ->
+        CompletedCreate (Err error) ->
             ( { model
                 | errors = model.errors ++ [ ( Form, "Server error while attempting to publish article" ) ]
                 , isSaving = False
@@ -193,12 +193,12 @@ update token navKey msg model =
             , Cmd.none
             )
 
-        EditCompleted (Ok article) ->
+        CompletedEdit (Ok article) ->
             Route.Article (Article.slug article)
                 |> Route.replaceUrl navKey
                 |> Tuple.pair model
 
-        EditCompleted (Err error) ->
+        CompletedEdit (Err error) ->
             ( { model
                 | errors = model.errors ++ [ ( Form, "Server error while attempting to save article" ) ]
                 , isSaving = False

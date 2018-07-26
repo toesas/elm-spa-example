@@ -87,7 +87,7 @@ view session model =
                     "Profile"
     , content =
         div [ class "profile-page" ]
-            [ Errors.view DismissErrors model.errors
+            [ Errors.view ClickedDismissErrors model.errors
             , div [ class "user-info" ]
                 [ div [ class "container" ]
                     [ div [ class "row" ]
@@ -118,8 +118,8 @@ viewFeed : Time.Zone -> Feed.Model -> Html Msg
 viewFeed timeZone feed =
     div [ class "col-xs-12 col-md-10 offset-md-1" ] <|
         div [ class "articles-toggle" ]
-            [ Feed.viewFeedSources feed |> Html.map FeedMsg ]
-            :: (Feed.viewArticles timeZone feed |> List.map (Html.map FeedMsg))
+            [ Feed.viewFeedSources feed |> Html.map GotFeedMsg ]
+            :: (Feed.viewArticles timeZone feed |> List.map (Html.map GotFeedMsg))
 
 
 
@@ -127,10 +127,10 @@ viewFeed timeZone feed =
 
 
 type Msg
-    = DismissErrors
-    | ToggleFollow
-    | FollowCompleted (Result Http.Error Profile)
-    | FeedMsg Feed.Msg
+    = ClickedDismissErrors
+    | ClickedFollow
+    | CompletedFollow (Result Http.Error Profile)
+    | GotFeedMsg Feed.Msg
 
 
 update : Maybe AuthToken -> Msg -> Model -> ( Model, Cmd Msg )
@@ -140,10 +140,10 @@ update maybeToken msg model =
             model.profile
     in
     case msg of
-        DismissErrors ->
+        ClickedDismissErrors ->
             ( { model | errors = [] }, Cmd.none )
 
-        ToggleFollow ->
+        ClickedFollow ->
             case maybeToken of
                 Nothing ->
                     ( { model | errors = model.errors ++ [ "You are currently signed out. You must be signed in to follow people." ] }
@@ -155,26 +155,26 @@ update maybeToken msg model =
                         |> Profile.toggleFollow
                             (Profile.username profile)
                             (Profile.following profile)
-                        |> Http.send FollowCompleted
+                        |> Http.send CompletedFollow
                         |> Tuple.pair model
 
-        FollowCompleted (Ok newProfile) ->
+        CompletedFollow (Ok newProfile) ->
             ( { model | profile = newProfile }, Cmd.none )
 
-        FollowCompleted (Err error) ->
+        CompletedFollow (Err error) ->
             ( model, Cmd.none )
 
-        FeedMsg subMsg ->
+        GotFeedMsg subMsg ->
             let
                 ( newFeed, subCmd ) =
                     Feed.update maybeToken subMsg model.feed
             in
-            ( { model | feed = newFeed }, Cmd.map FeedMsg subCmd )
+            ( { model | feed = newFeed }, Cmd.map GotFeedMsg subCmd )
 
 
 followButton : Profile -> Html Msg
 followButton profile =
-    Follow.button (\_ -> ToggleFollow)
+    Follow.button (\_ -> ClickedFollow)
         (Profile.following profile)
         (Profile.username profile)
 

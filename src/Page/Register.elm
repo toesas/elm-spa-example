@@ -64,23 +64,23 @@ view session model =
 
 viewForm : Html Msg
 viewForm =
-    Html.form [ onSubmit SubmitForm ]
+    Html.form [ onSubmit SubmittedForm ]
         [ Form.input
             [ class "form-control-lg"
             , placeholder "Username"
-            , onInput SetUsername
+            , onInput EnteredUsername
             ]
             []
         , Form.input
             [ class "form-control-lg"
             , placeholder "Email"
-            , onInput SetEmail
+            , onInput EnteredEmail
             ]
             []
         , Form.password
             [ class "form-control-lg"
             , placeholder "Password"
-            , onInput SetPassword
+            , onInput EnteredPassword
             ]
             []
         , button [ class "btn btn-lg btn-primary pull-xs-right" ]
@@ -93,26 +93,26 @@ viewForm =
 
 
 type Msg
-    = SubmitForm
-    | SetEmail String
-    | SetUsername String
-    | SetPassword String
-    | RegisterCompleted (Result Http.Error ( Me, AuthToken ))
+    = SubmittedForm
+    | EnteredEmail String
+    | EnteredUsername String
+    | EnteredPassword String
+    | CompletedRegister (Result Http.Error ( Me, AuthToken ))
 
 
 type ExternalMsg
     = NoOp
-    | SetMeAndToken ( Me, AuthToken )
+    | ChangedMeAndToken ( Me, AuthToken )
 
 
 update : Nav.Key -> Msg -> Model -> ( ( Model, Cmd Msg ), ExternalMsg )
 update navKey msg model =
     case msg of
-        SubmitForm ->
+        SubmittedForm ->
             case validate modelValidator model of
                 [] ->
                     ( ( { model | errors = [] }
-                      , Http.send RegisterCompleted (Me.register model)
+                      , Http.send CompletedRegister (Me.register model)
                       )
                     , NoOp
                     )
@@ -124,28 +124,28 @@ update navKey msg model =
                     , NoOp
                     )
 
-        SetEmail email ->
+        EnteredEmail email ->
             ( ( { model | email = email }
               , Cmd.none
               )
             , NoOp
             )
 
-        SetUsername username ->
+        EnteredUsername username ->
             ( ( { model | username = username }
               , Cmd.none
               )
             , NoOp
             )
 
-        SetPassword password ->
+        EnteredPassword password ->
             ( ( { model | password = password }
               , Cmd.none
               )
             , NoOp
             )
 
-        RegisterCompleted (Err error) ->
+        CompletedRegister (Err error) ->
             let
                 errorMessages =
                     case error of
@@ -163,11 +163,11 @@ update navKey msg model =
             , NoOp
             )
 
-        RegisterCompleted (Ok (( me, authToken ) as pair)) ->
+        CompletedRegister (Ok (( me, authToken ) as pair)) ->
             ( ( model
               , Cmd.batch [ Session.store me authToken, Route.replaceUrl navKey Route.Home ]
               )
-            , SetMeAndToken pair
+            , ChangedMeAndToken pair
             )
 
 
