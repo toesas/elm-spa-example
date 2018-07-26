@@ -92,10 +92,6 @@ decodeFlags json =
             Nothing
 
 
-onNavigation : Url -> Msg
-onNavigation url =
-    SetRoute (Route.fromUrl url)
-
 
 initialPage : CurrentPage
 initialPage =
