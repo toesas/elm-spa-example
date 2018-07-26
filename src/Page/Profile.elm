@@ -123,7 +123,7 @@ viewFeed timeZone feed =
 
 
 
--- UPDATE --
+-- UPDATE
 
 
 type Msg

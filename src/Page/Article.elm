@@ -33,7 +33,7 @@ import Views.Page as Page
 
 
 
--- MODEL --
+-- MODEL
 
 
 type alias Model =
@@ -64,7 +64,7 @@ init maybeToken slug =
 
 
 
--- VIEW --
+-- VIEW
 
 
 view : Session -> Model -> { title : String, content : Html Msg }
@@ -235,7 +235,7 @@ viewComment timeZone maybeMe comment =
 
 
 
--- UPDATE --
+-- UPDATE
 
 
 type Msg
@@ -387,7 +387,7 @@ update navKey session msg model =
 
 
 
--- INTERNAL --
+-- INTERNAL
 
 
 withoutComment : CommentId -> List Comment -> List Comment

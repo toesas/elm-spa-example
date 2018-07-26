@@ -39,7 +39,7 @@ import Views.Spinner exposing (spinner)
 
 
 
--- MODEL --
+-- MODEL
 
 
 type Model
@@ -80,7 +80,7 @@ init maybeToken feedSources =
 
 
 
--- VIEW --
+-- VIEW
 
 
 viewArticles : Time.Zone -> Model -> List (Html Msg)
@@ -207,7 +207,7 @@ pageLink page isActive =
 
 
 
--- UPDATE --
+-- UPDATE
 
 
 type Msg

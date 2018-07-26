@@ -18,7 +18,7 @@ import Views.Form as Form
 
 
 
--- MODEL --
+-- MODEL
 
 
 type alias Model =
@@ -43,7 +43,7 @@ init me =
 
 
 
--- VIEW --
+-- VIEW
 
 
 view : Session -> Model -> { title : String, content : Html Msg }
@@ -111,7 +111,7 @@ viewForm model =
 
 
 
--- UPDATE --
+-- UPDATE
 
 
 type Msg
@@ -230,7 +230,7 @@ update navKey authToken msg model =
 
 
 
--- VALIDATION --
+-- VALIDATION
 
 
 type Field

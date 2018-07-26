@@ -20,7 +20,7 @@ import Views.Page as Page
 
 
 
--- MODEL --
+-- MODEL
 
 
 type alias Model =
@@ -55,7 +55,7 @@ init maybeToken =
 
 
 
--- VIEW --
+-- VIEW
 
 
 view : Session -> Model -> { title : String, content : Html Msg }
@@ -114,7 +114,7 @@ viewTag tagName =
 
 
 
--- UPDATE --
+-- UPDATE
 
 
 type Msg
