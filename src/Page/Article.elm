@@ -49,7 +49,7 @@ init : Maybe AuthToken -> Slug -> Task PageLoadError Model
 init maybeToken slug =
     let
         loadArticle =
-            Article.get maybeToken slug
+            Article.fetch maybeToken slug
                 |> Http.toTask
 
         loadComments =

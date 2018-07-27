@@ -8,7 +8,7 @@ module Article
         , delete
         , followAuthor
         , fromPreview
-        , get
+        , fetch
         , metadata
         , previewDecoder
         , slug
@@ -180,8 +180,8 @@ metadataDecoder =
 -- SINGLE
 
 
-get : Maybe AuthToken -> Slug -> Http.Request (Article Full)
-get maybeToken articleSlug =
+fetch : Maybe AuthToken -> Slug -> Http.Request (Article Full)
+fetch maybeToken articleSlug =
     let
         expect =
             fullDecoder

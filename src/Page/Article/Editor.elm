@@ -48,7 +48,7 @@ initNew =
 
 initEdit : Maybe AuthToken -> Slug -> Task PageLoadError Model
 initEdit maybeToken slug =
-    Article.get maybeToken slug
+    Article.fetch maybeToken slug
         |> Http.toTask
         |> Task.mapError (\_ -> pageLoadError Page.Other "Article is currently unavailable.")
         |> Task.map

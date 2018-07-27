@@ -42,7 +42,7 @@ init maybeToken username =
             { defaultListConfig | limit = 5, author = Just username }
 
         loadProfile =
-            Profile.get username maybeToken
+            Profile.fetch username maybeToken
                 |> Http.toTask
 
         loadFeedSources =

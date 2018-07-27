@@ -1,4 +1,4 @@
-module Profile exposing (Profile, bio, decoder, follow, following, get, avatar, toggleFollow, username)
+module Profile exposing (Profile, bio, decoder, follow, following, fetch, avatar, toggleFollow, username)
 
 {-| A user's profile - potentially your own!
 
@@ -58,8 +58,8 @@ following (Profile info) =
 -- PROFILE
 
 
-get : Username -> Maybe AuthToken -> Http.Request Profile
-get uname maybeToken =
+fetch : Username -> Maybe AuthToken -> Http.Request Profile
+fetch uname maybeToken =
     Api.url [ "profiles", Username.toString uname ]
         |> HttpBuilder.get
         |> HttpBuilder.withExpect (Http.expectJson (Decode.field "profile" decoder))
