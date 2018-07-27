@@ -246,7 +246,6 @@ type Msg
     | ClickedFollow
     | ClickedPostComment
     | EnteredCommentText String
-      -- HTTP
     | CompletedDeleteArticle (Result Http.Error ())
     | CompletedDeleteComment CommentId (Result Http.Error ())
     | CompletedFavorite (Result Http.Error (Article Full))
