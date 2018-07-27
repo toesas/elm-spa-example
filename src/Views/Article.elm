@@ -33,16 +33,16 @@ viewTimestamp timeZone article =
 view : (Article a -> msg) -> Time.Zone -> Article a -> Html msg
 view toggleFavorite timeZone article =
     let
-        profile =
+        author =
             Article.author article
 
         username =
-            Profile.username profile
+            Profile.username author
     in
     div [ class "article-preview" ]
         [ div [ class "article-meta" ]
             [ a [ Route.href (Route.Profile username) ]
-                [ img [ UserPhoto.src (Profile.image profile) ] [] ]
+                [ img [ UserPhoto.src (Profile.image author) ] [] ]
             , div [ class "info" ]
                 [ Views.Author.view username
                 , viewTimestamp timeZone article
