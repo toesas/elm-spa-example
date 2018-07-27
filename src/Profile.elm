@@ -1,4 +1,4 @@
-module Profile exposing (Profile, bio, decoder, follow, following, fetch, avatar, toggleFollow, username)
+module Profile exposing (Profile, avatar, bio, decoder, fetch, follow, following, toggleFollow, username)
 
 {-| A user's profile - potentially your own!
 
@@ -30,6 +30,8 @@ type alias ProfileRecord =
     , avatar : Avatar
     , following : Bool
     }
+
+
 
 -- INFO
 
@@ -69,6 +71,7 @@ fetch uname maybeToken =
 
 
 -- FOLLOWING
+
 
 follow : Bool -> Profile -> Profile
 follow isFollowing (Profile info) =

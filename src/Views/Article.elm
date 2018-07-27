@@ -4,12 +4,12 @@ module Views.Article exposing (view, viewTimestamp)
 -}
 
 import Article exposing (Article)
+import Avatar exposing (Avatar)
 import Html exposing (..)
 import Html.Attributes exposing (attribute, class, classList, href, id, placeholder, src)
 import Profile
 import Route exposing (Route)
 import Time
-import Avatar exposing (Avatar)
 import Util
 import Views.Article.Favorite as Favorite
 import Views.Author
@@ -40,7 +40,8 @@ view toggleFavorite timeZone article =
         { title, description, favoritesCount } =
             Article.metadata article
 
-        author = Article.author article
+        author =
+            Article.author article
 
         username =
             Profile.username author

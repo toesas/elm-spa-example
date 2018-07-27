@@ -1,11 +1,11 @@
 port module Session exposing (Session, attempt, changes, clear, init, isLoggedIn, logout, me, store, timeZone, token, withTimeZone)
 
 import AuthToken exposing (AuthToken)
+import Avatar
 import Json.Decode as Decode
 import Json.Encode as Encode exposing (Value)
 import Me exposing (Me)
 import Time
-import Avatar
 import Username
 
 

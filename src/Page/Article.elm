@@ -265,7 +265,7 @@ update navKey session msg model =
         article =
             model.article
 
-        author  =
+        author =
             Article.author article
 
         oldBody =

@@ -3,13 +3,13 @@ module Views.Page exposing (ActivePage(..), frame)
 {-| The frame around a typical page - that is, the header and footer.
 -}
 
+import Avatar exposing (Avatar)
 import Browser exposing (Document)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Me exposing (Me)
 import Profile exposing (Profile)
 import Route exposing (Route)
-import Avatar exposing (Avatar)
 import Username exposing (Username)
 import Util
 import Views.Spinner exposing (spinner)

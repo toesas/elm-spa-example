@@ -1,6 +1,7 @@
 module Page.Settings exposing (ExternalMsg(..), Model, Msg, init, update, view)
 
 import AuthToken exposing (AuthToken)
+import Avatar
 import Browser.Navigation as Nav
 import Html exposing (Html, button, div, fieldset, h1, input, text, textarea)
 import Html.Attributes exposing (attribute, class, placeholder, type_, value)
@@ -11,7 +12,6 @@ import Json.Decode.Pipeline exposing (optional)
 import Me exposing (Me)
 import Route
 import Session exposing (Session)
-import Avatar
 import Username as Username exposing (Username)
 import Validate exposing (Validator, ifBlank, validate)
 import Views.Form as Form

@@ -3,13 +3,13 @@ module Article
         ( Article
         , Full
         , Preview
+        , author
         , body
         , create
         , delete
+        , fetch
         , followAuthor
         , fromPreview
-        , fetch
-        , author
         , metadata
         , previewDecoder
         , slug
@@ -96,17 +96,19 @@ of these fields!
 (Okay, to be completely honest, exposing one function per field is how I prefer
 to do it, and that's how I originally wrote this module. However, I'm aware that
 this code base has become a common reference point for beginners, and I think it
-is *extremely important* that slapping some "getters and setters" on a record
+is _extremely important_ that slapping some "getters and setters" on a record
 does not become a habit for anyone who is getting started with Elm. The whole
 point of making the Article type opaque is to create guarantees through
-*selectively choosing boundaries* around it. If you aren't selective about
+_selectively choosing boundaries_ around it. If you aren't selective about
 where those boundaries are, and instead expose a "getter and setter" for every
 field in the record, the result is an API with no more guarantees than if you'd
 exposed the entire record directly! It is so important to me that beginners not
 fall into the terrible "getters and setters" trap that I've exposed this
 Metadata record instead of exposing a single function for each of its fields,
 as I did originally. This record is not a bad way to do it, by any means,
-but if this seems at odds with https://youtu.be/x1FU3e0sT1I - now you know why!)
+but if this seems at odds with <https://youtu.be/x1FU3e0sT1I> - now you know why!
+See commit c2640ae3abd60262cdaafe6adee3f41d84cd85c3 for how it looked before.
+)
 -}
 type alias Metadata =
     { description : String
@@ -129,6 +131,7 @@ type Full
 
 -- INFO
 
+
 author : Article a -> Profile
 author (Article _ val _ _) =
     val
@@ -147,7 +150,6 @@ slug (Article val _ _ _) =
 body : Article Full -> Body
 body (Article _ _ _ (Full val)) =
     val
-
 
 
 
