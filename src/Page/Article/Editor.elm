@@ -53,12 +53,16 @@ initEdit maybeToken slug =
         |> Task.mapError (\_ -> pageLoadError Page.Other "Article is currently unavailable.")
         |> Task.map
             (\article ->
+                let
+                    meta =
+                        Article.metadata article
+                in
                 { errors = []
                 , editingArticle = Just slug
-                , title = Article.title article
+                , title = meta.title
                 , body = Article.Body.toMarkdownString (Article.body article)
-                , description = Article.description article
-                , tags = Article.tags article
+                , description = meta.description
+                , tags = meta.tags
                 , isSaving = False
                 }
             )

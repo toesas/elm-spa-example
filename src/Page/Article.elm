@@ -76,8 +76,8 @@ view session model =
         article =
             model.article
 
-        author =
-            Article.author article
+        { author, title } =
+            Article.metadata article
 
         buttons =
             viewButtons article author maybeMe
@@ -88,7 +88,7 @@ view session model =
         postingDisabled =
             model.commentInFlight
     in
-    { title = Article.title article
+    { title = title
     , content =
         div [ class "article-page" ]
             [ viewBanner timeZone model.errors article author maybeMe
@@ -122,12 +122,15 @@ view session model =
 viewBanner : Time.Zone -> List String -> Article a -> Profile -> Maybe Me -> Html Msg
 viewBanner timeZone errors article author maybeMe =
     let
+        { title } =
+            Article.metadata article
+
         buttons =
             viewButtons article author maybeMe
     in
     div [ class "banner" ]
         [ div [ class "container" ]
-            [ h1 [] [ text (Article.title article) ]
+            [ h1 [] [ text title ]
             , div [ class "article-meta" ] <|
                 [ a [ Route.href (Route.Profile (Profile.username author)) ]
                     [ img [ UserPhoto.src (Profile.image author) ] [] ]
@@ -259,8 +262,8 @@ update navKey session msg model =
         article =
             model.article
 
-        author =
-            Article.author article
+        { author } =
+            Article.metadata article
 
         oldBody =
             Article.body article
@@ -398,8 +401,11 @@ withoutComment id =
 favoriteButton : Article a -> Html Msg
 favoriteButton article =
     let
+        { favoritesCount } =
+            Article.metadata article
+
         favoriteText =
-            " Favorite Article (" ++ String.fromInt (Article.favoritesCount article) ++ ")"
+            " Favorite Article (" ++ String.fromInt favoritesCount ++ ")"
     in
     Favorite.button (\_ -> ClickedFavorite) article [] [ text favoriteText ]
 

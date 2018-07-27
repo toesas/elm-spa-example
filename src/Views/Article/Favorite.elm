@@ -24,7 +24,7 @@ button :
 button toggleFavorite article extraAttributes extraChildren =
     let
         favoriteButtonClass =
-            if Article.favorited article then
+            if (Article.metadata article).favorited then
                 "btn-primary"
 
             else

@@ -23,7 +23,11 @@ import Views.Author
 -}
 viewTimestamp : Time.Zone -> Article a -> Html msg
 viewTimestamp timeZone article =
-    span [ class "date" ] [ text (Util.formatTimestamp timeZone (Article.createdAt article)) ]
+    let
+        { createdAt } =
+            Article.metadata article
+    in
+    span [ class "date" ] [ text (Util.formatTimestamp timeZone createdAt) ]
 
 
 
@@ -33,8 +37,8 @@ viewTimestamp timeZone article =
 view : (Article a -> msg) -> Time.Zone -> Article a -> Html msg
 view toggleFavorite timeZone article =
     let
-        author =
-            Article.author article
+        { author, title, description, favoritesCount } =
+            Article.metadata article
 
         username =
             Profile.username author
@@ -51,11 +55,11 @@ view toggleFavorite timeZone article =
                 toggleFavorite
                 article
                 [ class "pull-xs-right" ]
-                [ text (" " ++ String.fromInt (Article.favoritesCount article)) ]
+                [ text (" " ++ String.fromInt favoritesCount) ]
             ]
         , a [ class "preview-link", Route.href (Route.Article (Article.slug article)) ]
-            [ h1 [] [ text (Article.title article) ]
-            , p [] [ text (Article.description article) ]
+            [ h1 [] [ text title ]
+            , p [] [ text description ]
             , span [] [ text "Read more..." ]
             ]
         ]

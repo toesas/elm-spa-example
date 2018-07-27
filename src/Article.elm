@@ -3,21 +3,15 @@ module Article
         ( Article
         , Full
         , Preview
-        , author
         , body
         , create
-        , createdAt
         , delete
-        , description
-        , favorited
-        , favoritesCount
         , followAuthor
         , fromPreview
         , get
+        , metadata
         , previewDecoder
         , slug
-        , tags
-        , title
         , toggleFavorite
         , update
         )
@@ -82,19 +76,17 @@ Those articles are useful to the feed, but not to the individual article view.
 
 -}
 type Article a
-    = Article (ArticleRecord a)
+    = Article Slug Metadata a
 
 
-type alias ArticleRecord a =
+type alias Metadata =
     { description : String
-    , slug : Slug
     , title : String
     , tags : List String
     , createdAt : Time.Posix
     , favorited : Bool
     , favoritesCount : Int
     , author : Profile
-    , extraInfo : a
     }
 
 
@@ -107,84 +99,38 @@ type Full
 
 
 
--- ACCESS
+-- INFO
 
 
-description : Article a -> String
-description (Article info) =
-    info.description
+metadata : Article a -> Metadata
+metadata (Article _ val _) =
+    val
 
 
 slug : Article a -> Slug
-slug (Article info) =
-    info.slug
-
-
-title : Article a -> String
-title (Article info) =
-    info.title
-
-
-tags : Article a -> List String
-tags (Article info) =
-    info.tags
-
-
-createdAt : Article a -> Time.Posix
-createdAt (Article info) =
-    info.createdAt
-
-
-favorited : Article a -> Bool
-favorited (Article info) =
-    info.favorited
-
-
-favoritesCount : Article a -> Int
-favoritesCount (Article info) =
-    info.favoritesCount
-
-
-author : Article a -> Profile
-author (Article info) =
-    info.author
+slug (Article val _ _) =
+    val
 
 
 body : Article Full -> Body
-body (Article info) =
-    let
-        (Full val) =
-            info.extraInfo
-    in
+body (Article _ _ (Full val)) =
     val
 
 
 
--- MODIFY
+-- TRANSFORM
 
 
 followAuthor : Bool -> Article a -> Article a
-followAuthor isFollowing (Article info) =
-    Article { info | author = Profile.follow isFollowing info.author }
-
-
-
--- CONVERT
+followAuthor isFollowing (Article slugVal meta extras) =
+    Article slugVal
+        { meta | author = Profile.follow isFollowing meta.author }
+        extras
 
 
 fromPreview : Body -> Article Preview -> Article Full
-fromPreview newBody (Article preview) =
-    Article
-        { description = preview.description
-        , slug = preview.slug
-        , title = preview.title
-        , tags = preview.tags
-        , createdAt = preview.createdAt
-        , favorited = preview.favorited
-        , favoritesCount = preview.favoritesCount
-        , author = preview.author
-        , extraInfo = Full newBody
-        }
+fromPreview newBody (Article newSlug newMetadata Preview) =
+    Article newSlug newMetadata (Full newBody)
 
 
 
@@ -193,23 +139,24 @@ fromPreview newBody (Article preview) =
 
 previewDecoder : Decoder (Article Preview)
 previewDecoder =
-    partialDecoder
+    Decode.succeed Article
+        |> required "slug" Slug.decoder
+        |> custom metadataDecoder
         |> hardcoded Preview
-        |> Decode.map Article
 
 
 fullDecoder : Decoder (Article Full)
 fullDecoder =
-    partialDecoder
-        |> required "body" (Decode.map Full Body.decoder)
-        |> Decode.map Article
-
-
-partialDecoder : Decoder (a -> ArticleRecord a)
-partialDecoder =
-    Decode.succeed ArticleRecord
-        |> required "description" (Decode.map (Maybe.withDefault "") (Decode.nullable Decode.string))
+    Decode.succeed Article
         |> required "slug" Slug.decoder
+        |> custom metadataDecoder
+        |> required "body" (Decode.map Full Body.decoder)
+
+
+metadataDecoder : Decoder Metadata
+metadataDecoder =
+    Decode.succeed Metadata
+        |> required "description" (Decode.map (Maybe.withDefault "") (Decode.nullable Decode.string))
         |> required "title" Decode.string
         |> required "tagList" (Decode.list Decode.string)
         |> required "createdAt" Util.dateStringDecoder
@@ -242,12 +189,12 @@ get maybeToken articleSlug =
 
 
 toggleFavorite : Article a -> AuthToken -> Http.Request (Article Preview)
-toggleFavorite (Article info) authToken =
-    if info.favorited then
-        unfavorite info.slug authToken
+toggleFavorite (Article slugVal { favorited } _) authToken =
+    if favorited then
+        unfavorite slugVal authToken
 
     else
-        favorite info.slug authToken
+        favorite slugVal authToken
 
 
 favorite : Slug -> AuthToken -> Http.Request (Article Preview)
