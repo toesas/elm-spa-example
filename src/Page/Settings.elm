@@ -11,7 +11,7 @@ import Json.Decode.Pipeline exposing (optional)
 import Me exposing (Me)
 import Route
 import Session exposing (Session)
-import UserPhoto
+import Avatar
 import Username as Username exposing (Username)
 import Validate exposing (Validator, ifBlank, validate)
 import Views.Form as Form
@@ -34,7 +34,7 @@ type alias Model =
 init : Me -> Model
 init me =
     { errors = []
-    , image = UserPhoto.toMaybeString (Me.image me)
+    , image = Avatar.toMaybeString (Me.image me)
     , email = Me.email me
     , bio = Maybe.withDefault "" (Me.bio me)
     , username = Username.toString (Me.username me)

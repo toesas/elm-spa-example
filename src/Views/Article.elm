@@ -9,7 +9,7 @@ import Html.Attributes exposing (attribute, class, classList, href, id, placehol
 import Profile
 import Route exposing (Route)
 import Time
-import UserPhoto exposing (UserPhoto)
+import Avatar exposing (Avatar)
 import Util
 import Views.Article.Favorite as Favorite
 import Views.Author
@@ -46,7 +46,7 @@ view toggleFavorite timeZone article =
     div [ class "article-preview" ]
         [ div [ class "article-meta" ]
             [ a [ Route.href (Route.Profile username) ]
-                [ img [ UserPhoto.src (Profile.image author) ] [] ]
+                [ img [ Avatar.src (Profile.avatar author) ] [] ]
             , div [ class "info" ]
                 [ Views.Author.view username
                 , viewTimestamp timeZone article

@@ -1,4 +1,4 @@
-module UserPhoto exposing (UserPhoto, decoder, encode, src, toMaybeString)
+module Avatar exposing (Avatar, decoder, encode, src, toMaybeString)
 
 import Html exposing (Attribute)
 import Html.Attributes
@@ -10,37 +10,37 @@ import Json.Encode as Encode exposing (Value)
 -- TYPES
 
 
-type UserPhoto
-    = UserPhoto (Maybe String)
+type Avatar
+    = Avatar (Maybe String)
 
 
 
 -- CREATE
 
 
-decoder : Decoder UserPhoto
+decoder : Decoder Avatar
 decoder =
-    Decode.map UserPhoto (Decode.nullable Decode.string)
+    Decode.map Avatar (Decode.nullable Decode.string)
 
 
 
 -- CONVERT
 
 
-encode : UserPhoto -> Value
-encode (UserPhoto maybeUrl) =
+encode : Avatar -> Value
+encode (Avatar maybeUrl) =
     maybeUrl
         |> Maybe.map Encode.string
         |> Maybe.withDefault Encode.null
 
 
-src : UserPhoto -> Attribute msg
-src photo =
-    Html.Attributes.src (photoToUrl photo)
+src : Avatar -> Attribute msg
+src avatar =
+    Html.Attributes.src (avatarToUrl avatar)
 
 
-toMaybeString : UserPhoto -> Maybe String
-toMaybeString (UserPhoto maybeUrl) =
+toMaybeString : Avatar -> Maybe String
+toMaybeString (Avatar maybeUrl) =
     maybeUrl
 
 
@@ -48,8 +48,8 @@ toMaybeString (UserPhoto maybeUrl) =
 -- INTERNAL
 
 
-photoToUrl : UserPhoto -> String
-photoToUrl (UserPhoto maybeUrl) =
+avatarToUrl : Avatar -> String
+avatarToUrl (Avatar maybeUrl) =
     case maybeUrl of
         Nothing ->
             defaultPhotoUrl

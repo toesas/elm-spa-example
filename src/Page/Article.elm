@@ -8,6 +8,7 @@ import Article.Body
 import Article.Comment as Comment exposing (Comment)
 import Article.Slug as Slug exposing (Slug)
 import AuthToken exposing (AuthToken)
+import Avatar
 import Browser.Navigation as Nav
 import CommentId exposing (CommentId)
 import Html exposing (..)
@@ -21,7 +22,6 @@ import Route
 import Session exposing (Session)
 import Task exposing (Task)
 import Time
-import UserPhoto
 import Username exposing (Username)
 import Util
 import Views.Article
@@ -101,7 +101,7 @@ view session model =
                 , div [ class "article-actions" ]
                     [ div [ class "article-meta" ] <|
                         [ a [ Route.href (Route.Profile (Profile.username author)) ]
-                            [ img [ UserPhoto.src (Profile.image author) ] [] ]
+                            [ img [ Avatar.src (Profile.avatar author) ] [] ]
                         , div [ class "info" ]
                             [ Views.Author.view (Profile.username author)
                             , Views.Article.viewTimestamp timeZone article
@@ -133,7 +133,7 @@ viewBanner timeZone errors article author maybeMe =
             [ h1 [] [ text title ]
             , div [ class "article-meta" ] <|
                 [ a [ Route.href (Route.Profile (Profile.username author)) ]
-                    [ img [ UserPhoto.src (Profile.image author) ] [] ]
+                    [ img [ Avatar.src (Profile.avatar author) ] [] ]
                 , div [ class "info" ]
                     [ Views.Author.view (Profile.username author)
                     , Views.Article.viewTimestamp timeZone article
@@ -168,7 +168,7 @@ viewAddComment postingDisabled maybeMe =
                         []
                     ]
                 , div [ class "card-footer" ]
-                    [ img [ class "comment-author-img", UserPhoto.src (Me.image me) ] []
+                    [ img [ class "comment-author-img", Avatar.src (Me.image me) ] []
                     , button
                         [ class "btn btn-sm btn-primary"
                         , disabled postingDisabled
@@ -217,7 +217,7 @@ viewComment timeZone maybeMe comment =
             [ p [ class "card-text" ] [ text (Comment.body comment) ] ]
         , div [ class "card-footer" ]
             [ a [ class "comment-author", href "" ]
-                [ img [ class "comment-author-img", UserPhoto.src (Profile.image author) ] []
+                [ img [ class "comment-author-img", Avatar.src (Profile.avatar author) ] []
                 , text " "
                 ]
             , text " "

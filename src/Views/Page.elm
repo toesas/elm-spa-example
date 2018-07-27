@@ -9,7 +9,7 @@ import Html.Attributes exposing (..)
 import Me exposing (Me)
 import Profile exposing (Profile)
 import Route exposing (Route)
-import UserPhoto exposing (UserPhoto)
+import Avatar exposing (Avatar)
 import Username exposing (Username)
 import Util
 import Views.Spinner exposing (spinner)
@@ -88,7 +88,7 @@ viewSignIn page maybeMe =
             , linkTo Route.Settings [ i [ class "ion-gear-a" ] [], text " Settings" ]
             , linkTo
                 (Route.Profile (Me.username me))
-                [ img [ class "user-pic", UserPhoto.src (Me.image me) ] []
+                [ img [ class "user-pic", Avatar.src (Me.image me) ] []
                 , Username.toHtml (Me.username me)
                 ]
             , linkTo Route.Logout [ text "Sign out" ]

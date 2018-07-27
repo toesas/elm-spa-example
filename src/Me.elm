@@ -2,12 +2,12 @@ module Me exposing (Me, bio, decoder, decoderWithToken, edit, email, image, logi
 
 import Api
 import AuthToken exposing (AuthToken, withAuthorization)
+import Avatar exposing (Avatar)
 import Http
 import HttpBuilder exposing (RequestBuilder, withExpect)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (custom, required)
 import Json.Encode as Encode exposing (Value)
-import UserPhoto exposing (UserPhoto)
 import Username exposing (Username)
 
 
@@ -25,7 +25,7 @@ type Me
 type alias MeRecord =
     { username : Username
     , bio : Maybe String
-    , image : UserPhoto
+    , image : Avatar
     , email : String
     }
 
@@ -44,7 +44,7 @@ bio (Me info) =
     info.bio
 
 
-image : Me -> UserPhoto
+image : Me -> Avatar
 image (Me info) =
     info.image
 
@@ -150,7 +150,7 @@ decoder =
     Decode.succeed MeRecord
         |> required "username" Username.decoder
         |> required "bio" (Decode.nullable Decode.string)
-        |> required "image" UserPhoto.decoder
+        |> required "image" Avatar.decoder
         |> required "email" Decode.string
         |> Decode.map Me
 

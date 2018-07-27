@@ -1,4 +1,4 @@
-module Profile exposing (Profile, bio, decoder, follow, following, get, image, toggleFollow, username)
+module Profile exposing (Profile, bio, decoder, follow, following, get, avatar, toggleFollow, username)
 
 {-| A user's profile - potentially your own!
 
@@ -8,11 +8,11 @@ Contrast with Me, which is the currently signed-in user.
 
 import Api
 import AuthToken exposing (AuthToken, withAuthorization)
+import Avatar exposing (Avatar)
 import Http
 import HttpBuilder exposing (RequestBuilder, withExpect)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (required)
-import UserPhoto exposing (UserPhoto)
 import Username exposing (Username)
 
 
@@ -27,13 +27,11 @@ type Profile
 type alias ProfileRecord =
     { username : Username
     , bio : Maybe String
-    , image : UserPhoto
+    , avatar : Avatar
     , following : Bool
     }
 
-
-
--- ACCESS
+-- INFO
 
 
 username : Profile -> Username
@@ -46,9 +44,9 @@ bio (Profile info) =
     info.bio
 
 
-image : Profile -> UserPhoto
-image (Profile info) =
-    info.image
+avatar : Profile -> Avatar
+avatar (Profile info) =
+    info.avatar
 
 
 following : Profile -> Bool
@@ -70,8 +68,7 @@ get uname maybeToken =
 
 
 
--- FOLLOWING --
-
+-- FOLLOWING
 
 follow : Bool -> Profile -> Profile
 follow isFollowing (Profile info) =
@@ -119,6 +116,6 @@ decoder =
     Decode.succeed ProfileRecord
         |> required "username" Username.decoder
         |> required "bio" (Decode.nullable Decode.string)
-        |> required "image" UserPhoto.decoder
+        |> required "image" Avatar.decoder
         |> required "following" Decode.bool
         |> Decode.map Profile

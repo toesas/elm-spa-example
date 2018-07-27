@@ -5,7 +5,7 @@ import Json.Decode as Decode
 import Json.Encode as Encode exposing (Value)
 import Me exposing (Me)
 import Time
-import UserPhoto
+import Avatar
 import Username
 
 
@@ -103,7 +103,7 @@ store myself authToken =
         [ ( "email", Encode.string (Me.email myself) )
         , ( "username", Username.encode (Me.username myself) )
         , ( "bio", Maybe.withDefault Encode.null (Maybe.map Encode.string (Me.bio myself)) )
-        , ( "image", UserPhoto.encode (Me.image myself) )
+        , ( "image", Avatar.encode (Me.image myself) )
         , ( "token", AuthToken.encode authToken )
         ]
         |> Encode.encode 0

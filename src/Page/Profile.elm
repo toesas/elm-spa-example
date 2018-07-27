@@ -6,6 +6,7 @@ module Page.Profile exposing (Model, Msg, init, update, view)
 import Article.Feed as Feed exposing (ListConfig, defaultListConfig)
 import Article.FeedSources as FeedSources exposing (FeedSources, Source(..))
 import AuthToken exposing (AuthToken)
+import Avatar exposing (Avatar)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Http
@@ -15,7 +16,6 @@ import Profile exposing (Profile)
 import Session exposing (Session)
 import Task exposing (Task)
 import Time
-import UserPhoto exposing (UserPhoto)
 import Username exposing (Username)
 import Views.Article.Feed as Feed
 import Views.Errors as Errors
@@ -24,7 +24,7 @@ import Views.Page as Page
 
 
 
--- MODEL --
+-- MODEL
 
 
 type alias Model =
@@ -57,7 +57,7 @@ init maybeToken username =
 
 
 
--- VIEW --
+-- VIEW
 
 
 view : Session -> Model -> { title : String, content : Html Msg }
@@ -91,27 +91,23 @@ view session model =
             , div [ class "user-info" ]
                 [ div [ class "container" ]
                     [ div [ class "row" ]
-                        [ viewProfileInfo isMyProfile profile ]
+                        [ div [ class "col-xs-12 col-md-10 offset-md-1" ]
+                            [ img [ class "user-img", Avatar.src (Profile.avatar profile) ] []
+                            , h4 [] [ Username.toHtml (Profile.username profile) ]
+                            , p [] [ text (Maybe.withDefault "" (Profile.bio profile)) ]
+                            , if isMyProfile then
+                                text ""
+
+                              else
+                                followButton profile
+                            ]
+                        ]
                     ]
                 ]
             , div [ class "container" ]
                 [ div [ class "row" ] [ viewFeed (Session.timeZone session) model.feed ] ]
             ]
     }
-
-
-viewProfileInfo : Bool -> Profile -> Html Msg
-viewProfileInfo isMyProfile profile =
-    div [ class "col-xs-12 col-md-10 offset-md-1" ]
-        [ img [ class "user-img", UserPhoto.src (Profile.image profile) ] []
-        , h4 [] [ Username.toHtml (Profile.username profile) ]
-        , p [] [ text (Maybe.withDefault "" (Profile.bio profile)) ]
-        , if isMyProfile then
-            text ""
-
-          else
-            followButton profile
-        ]
 
 
 viewFeed : Time.Zone -> Feed.Model -> Html Msg
