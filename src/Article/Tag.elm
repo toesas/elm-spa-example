@@ -1,8 +1,8 @@
 module Article.Tag exposing (Tag, list, toString)
 
+import Api
 import Http
 import Json.Decode as Decode exposing (Decoder)
-import Util exposing (apiUrl)
 
 
 
@@ -29,7 +29,7 @@ toString (Tag slug) =
 list : Http.Request (List Tag)
 list =
     Decode.field "tags" (Decode.list decoder)
-        |> Http.get (apiUrl "/tags")
+        |> Http.get (Api.url [ "tags" ])
 
 
 

@@ -6,6 +6,7 @@ Contrast with Me, which is the currently signed-in user.
 
 -}
 
+import Api
 import AuthToken exposing (AuthToken, withAuthorization)
 import Http
 import HttpBuilder exposing (RequestBuilder, withExpect)
@@ -13,7 +14,6 @@ import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (required)
 import UserPhoto exposing (UserPhoto)
 import Username exposing (Username)
-import Util exposing (apiUrl)
 
 
 
@@ -62,7 +62,7 @@ following (Profile info) =
 
 get : Username -> Maybe AuthToken -> Http.Request Profile
 get uname maybeToken =
-    apiUrl ("/profiles/" ++ Username.toString uname)
+    Api.url [ "profiles", Username.toString uname ]
         |> HttpBuilder.get
         |> HttpBuilder.withExpect (Http.expectJson (Decode.field "profile" decoder))
         |> withAuthorization maybeToken
@@ -103,8 +103,7 @@ buildFollow :
     -> AuthToken
     -> Http.Request Profile
 buildFollow builderFromUrl uname token =
-    [ apiUrl "/profiles", Username.toString uname, "follow" ]
-        |> String.join "/"
+    Api.url [ "profiles", Username.toString uname, "follow" ]
         |> builderFromUrl
         |> withAuthorization (Just token)
         |> withExpect (Http.expectJson (Decode.field "profile" decoder))

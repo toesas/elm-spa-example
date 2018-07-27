@@ -9,6 +9,7 @@ module Article.Feed
         , list
         )
 
+import Api
 import Article exposing (Article, Preview)
 import Article.Tag as Tag exposing (Tag)
 import AuthToken exposing (AuthToken, withAuthorization)
@@ -17,7 +18,6 @@ import HttpBuilder exposing (RequestBuilder, withExpect, withQueryParams)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (required)
 import Username exposing (Username)
-import Util exposing (apiUrl)
 
 
 
@@ -62,7 +62,7 @@ list config maybeToken =
     , Just ( "offset", String.fromInt config.offset )
     ]
         |> List.filterMap identity
-        |> buildFromQueryParams "/articles"
+        |> buildFromQueryParams (Api.url [ "articles" ])
         |> withAuthorization maybeToken
         |> HttpBuilder.toRequest
 
@@ -89,7 +89,7 @@ feed config token =
     [ ( "limit", String.fromInt config.limit )
     , ( "offset", String.fromInt config.offset )
     ]
-        |> buildFromQueryParams "/articles/feed"
+        |> buildFromQueryParams (Api.url [ "articles", "feed" ])
         |> withAuthorization (Just token)
         |> HttpBuilder.toRequest
 
@@ -111,8 +111,6 @@ decoder =
 
 buildFromQueryParams : String -> List ( String, String ) -> RequestBuilder Feed
 buildFromQueryParams url queryParams =
-    url
-        |> apiUrl
-        |> HttpBuilder.get
+    HttpBuilder.get url
         |> withExpect (Http.expectJson decoder)
         |> withQueryParams queryParams

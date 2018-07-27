@@ -1,5 +1,6 @@
 module Me exposing (Me, bio, decoder, decoderWithToken, edit, email, image, login, register, username)
 
+import Api
 import AuthToken exposing (AuthToken, withAuthorization)
 import Http
 import HttpBuilder exposing (RequestBuilder, withExpect)
@@ -8,7 +9,6 @@ import Json.Decode.Pipeline exposing (custom, required)
 import Json.Encode as Encode exposing (Value)
 import UserPhoto exposing (UserPhoto)
 import Username exposing (Username)
-import Util exposing (apiUrl)
 
 
 {-| The currently signed-in user.
@@ -72,7 +72,7 @@ login params =
                 |> Http.jsonBody
     in
     Decode.field "user" decoderWithToken
-        |> Http.post (apiUrl "/users/login") body
+        |> Http.post (Api.url [ "users", "login" ]) body
 
 
 
@@ -94,7 +94,7 @@ register params =
                 |> Http.jsonBody
     in
     Decode.field "user" decoderWithToken
-        |> Http.post (apiUrl "/users") body
+        |> Http.post (Api.url [ "users" ]) body
 
 
 
@@ -133,7 +133,7 @@ edit authToken params =
             Decode.field "user" decoder
                 |> Http.expectJson
     in
-    apiUrl "/user"
+    Api.url [ "user" ]
         |> HttpBuilder.put
         |> HttpBuilder.withExpect expect
         |> HttpBuilder.withBody body

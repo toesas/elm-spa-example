@@ -10,6 +10,7 @@ module Article.Comment
         , post
         )
 
+import Api
 import Article exposing (Article)
 import Article.Slug as Slug exposing (Slug)
 import AuthToken exposing (AuthToken, withAuthorization)
@@ -21,7 +22,7 @@ import Json.Decode.Pipeline exposing (custom, required)
 import Json.Encode as Encode exposing (Value)
 import Profile exposing (Profile)
 import Time
-import Util exposing (apiUrl)
+import Util
 
 
 
@@ -69,8 +70,8 @@ author (Comment comment) =
 
 
 list : Maybe AuthToken -> Slug -> Http.Request (List Comment)
-list maybeToken slug =
-    apiUrl ("/articles/" ++ Slug.toString slug ++ "/comments")
+list maybeToken articleSlug =
+    allCommentsUrl articleSlug []
         |> HttpBuilder.get
         |> HttpBuilder.withExpect (Http.expectJson (Decode.field "comments" (Decode.list decoder)))
         |> withAuthorization maybeToken
@@ -83,7 +84,7 @@ list maybeToken slug =
 
 post : Slug -> String -> AuthToken -> Http.Request Comment
 post articleSlug commentBody token =
-    apiUrl ("/articles/" ++ Slug.toString articleSlug ++ "/comments")
+    allCommentsUrl articleSlug []
         |> HttpBuilder.post
         |> HttpBuilder.withBody (Http.jsonBody (encodeCommentBody commentBody))
         |> HttpBuilder.withExpect (Http.expectJson (Decode.field "comment" decoder))
@@ -101,15 +102,15 @@ encodeCommentBody str =
 
 
 delete : Slug -> CommentId -> AuthToken -> Http.Request ()
-delete slug commentId token =
-    apiUrl ("/articles/" ++ Slug.toString slug ++ "/comments/" ++ CommentId.toString commentId)
+delete articleSlug commentId token =
+    commentUrl articleSlug commentId
         |> HttpBuilder.delete
         |> withAuthorization (Just token)
         |> HttpBuilder.toRequest
 
 
 
--- INTERNAL
+-- SERIALIZATION
 
 
 decoder : Decoder Comment
@@ -120,3 +121,17 @@ decoder =
         |> required "createdAt" Util.dateStringDecoder
         |> required "author" Profile.decoder
         |> Decode.map Comment
+
+
+
+-- URLS
+
+
+commentUrl : Slug -> CommentId -> String
+commentUrl articleSlug commentId =
+    allCommentsUrl articleSlug [ CommentId.toString commentId ]
+
+
+allCommentsUrl : Slug -> List String -> String
+allCommentsUrl articleSlug paths =
+    Api.url ([ "articles", Slug.toString articleSlug, "comments" ] ++ paths)

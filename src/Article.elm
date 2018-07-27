@@ -36,6 +36,7 @@ using the functions exposed in this module - the HTTP requests and such.
 
 -}
 
+import Api
 import Article.Body as Body exposing (Body)
 import Article.Slug as Slug exposing (Slug)
 import Article.Tag as Tag exposing (Tag)
@@ -50,7 +51,7 @@ import Markdown
 import Profile exposing (Profile)
 import Time
 import Username as Username exposing (Username)
-import Util exposing (apiUrl)
+import Util
 
 
 
@@ -229,7 +230,7 @@ get maybeToken articleSlug =
                 |> Decode.field "article"
                 |> Http.expectJson
     in
-    apiUrl ("/articles/" ++ Slug.toString articleSlug)
+    articleUrl articleSlug []
         |> HttpBuilder.get
         |> HttpBuilder.withExpect expect
         |> withAuthorization maybeToken
@@ -272,11 +273,7 @@ buildFavorite builderFromUrl articleSlug token =
                 |> Http.expectJson
 
         url =
-            String.join "/"
-                [ apiUrl "/articles"
-                , Slug.toString articleSlug
-                , "favorite"
-                ]
+            articleUrl articleSlug [ "favorite" ]
     in
     builderFromUrl url
         |> withAuthorization (Just token)
@@ -325,7 +322,7 @@ create config token =
             Encode.object [ ( "article", article ) ]
                 |> Http.jsonBody
     in
-    apiUrl "/articles"
+    Api.url [ "articles" ]
         |> HttpBuilder.post
         |> withAuthorization (Just token)
         |> withBody jsonBody
@@ -356,7 +353,7 @@ update articleSlug config token =
             Encode.object [ ( "article", article ) ]
                 |> Http.jsonBody
     in
-    apiUrl ("/articles/" ++ Slug.toString articleSlug)
+    articleUrl articleSlug []
         |> HttpBuilder.put
         |> withAuthorization (Just token)
         |> withBody jsonBody
@@ -370,7 +367,21 @@ update articleSlug config token =
 
 delete : Slug -> AuthToken -> Http.Request ()
 delete articleSlug token =
-    apiUrl ("/articles/" ++ Slug.toString articleSlug)
+    articleUrl articleSlug []
         |> HttpBuilder.delete
         |> withAuthorization (Just token)
         |> HttpBuilder.toRequest
+
+
+
+-- URLS
+
+
+articleUrl : Slug -> List String -> String
+articleUrl articleSlug paths =
+    allArticlesUrl (Slug.toString articleSlug :: paths)
+
+
+allArticlesUrl : List String -> String
+allArticlesUrl paths =
+    Api.url ("articles" :: paths)
