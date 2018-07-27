@@ -76,8 +76,11 @@ view session model =
         article =
             model.article
 
-        { author, title } =
+        { title } =
             Article.metadata article
+
+        author =
+            Article.author article
 
         buttons =
             viewButtons article author maybeMe
@@ -262,8 +265,8 @@ update navKey session msg model =
         article =
             model.article
 
-        { author } =
-            Article.metadata article
+        author  =
+            Article.author article
 
         oldBody =
             Article.body article

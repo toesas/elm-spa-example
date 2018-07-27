@@ -9,6 +9,7 @@ module Article
         , followAuthor
         , fromPreview
         , fetch
+        , author
         , metadata
         , previewDecoder
         , slug
@@ -76,19 +77,36 @@ Those articles are useful to the feed, but not to the individual article view.
 
 -}
 type Article a
-    = Article Slug Metadata a
+    = Article Slug Profile Metadata a
 
 
 {-| Metadata about the article - its title, description, and so on.
 
 Importantly, this module's public API exposes a way to read this metadata, but
-not to alter it. This is read-only information! Only the server can alter it.
+not to alter it. There is only one
 
 If we find ourselves using any particular piece of metadata often,
 for example `title`, we could expose a convenience function like this:
 
 Article.title : Article a -> String
 
+If you like, it's totally reasonable to expose a function like that for every one
+of these fields!
+
+(Okay, to be completely honest, exposing one function per field is how I prefer
+to do it, and that's how I originally wrote this module. However, I'm aware that
+this code base has become a common reference point for beginners, and I think it
+is *extremely important* that slapping some "getters and setters" on a record
+does not become a habit for anyone who is getting started with Elm. The whole
+point of making the Article type opaque is to create guarantees through
+*selectively choosing boundaries* around it. If you aren't selective about
+where those boundaries are, and instead expose a "getter and setter" for every
+field in the record, the result is an API with no more guarantees than if you'd
+exposed the entire record directly! It is so important to me that beginners not
+fall into the terrible "getters and setters" trap that I've exposed this
+Metadata record instead of exposing a single function for each of its fields,
+as I did originally. This record is not a bad way to do it, by any means,
+but if this seems at odds with https://youtu.be/x1FU3e0sT1I - now you know why!)
 -}
 type alias Metadata =
     { description : String
@@ -97,7 +115,6 @@ type alias Metadata =
     , createdAt : Time.Posix
     , favorited : Bool
     , favoritesCount : Int
-    , author : Profile
     }
 
 
@@ -112,20 +129,25 @@ type Full
 
 -- INFO
 
+author : Article a -> Profile
+author (Article _ val _ _) =
+    val
+
 
 metadata : Article a -> Metadata
-metadata (Article _ val _) =
+metadata (Article _ _ val _) =
     val
 
 
 slug : Article a -> Slug
-slug (Article val _ _) =
+slug (Article val _ _ _) =
     val
 
 
 body : Article Full -> Body
-body (Article _ _ (Full val)) =
+body (Article _ _ _ (Full val)) =
     val
+
 
 
 
@@ -133,15 +155,13 @@ body (Article _ _ (Full val)) =
 
 
 followAuthor : Bool -> Article a -> Article a
-followAuthor isFollowing (Article slugVal meta extras) =
-    Article slugVal
-        { meta | author = Profile.follow isFollowing meta.author }
-        extras
+followAuthor isFollowing (Article slugVal authorVal meta extras) =
+    Article slugVal (Profile.follow isFollowing authorVal) meta extras
 
 
 fromPreview : Body -> Article Preview -> Article Full
-fromPreview newBody (Article newSlug newMetadata Preview) =
-    Article newSlug newMetadata (Full newBody)
+fromPreview newBody (Article newSlug newAuthor newMetadata Preview) =
+    Article newSlug newAuthor newMetadata (Full newBody)
 
 
 
@@ -152,6 +172,7 @@ previewDecoder : Decoder (Article Preview)
 previewDecoder =
     Decode.succeed Article
         |> required "slug" Slug.decoder
+        |> required "author" Profile.decoder
         |> custom metadataDecoder
         |> hardcoded Preview
 
@@ -160,6 +181,7 @@ fullDecoder : Decoder (Article Full)
 fullDecoder =
     Decode.succeed Article
         |> required "slug" Slug.decoder
+        |> required "author" Profile.decoder
         |> custom metadataDecoder
         |> required "body" (Decode.map Full Body.decoder)
 
@@ -173,7 +195,6 @@ metadataDecoder =
         |> required "createdAt" Util.dateStringDecoder
         |> required "favorited" Decode.bool
         |> required "favoritesCount" Decode.int
-        |> required "author" Profile.decoder
 
 
 
@@ -200,7 +221,7 @@ fetch maybeToken articleSlug =
 
 
 toggleFavorite : Article a -> AuthToken -> Http.Request (Article Preview)
-toggleFavorite (Article slugVal { favorited } _) authToken =
+toggleFavorite (Article slugVal _ { favorited } _) authToken =
     if favorited then
         unfavorite slugVal authToken
 

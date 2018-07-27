@@ -37,8 +37,10 @@ viewTimestamp timeZone article =
 view : (Article a -> msg) -> Time.Zone -> Article a -> Html msg
 view toggleFavorite timeZone article =
     let
-        { author, title, description, favoritesCount } =
+        { title, description, favoritesCount } =
             Article.metadata article
+
+        author = Article.author article
 
         username =
             Profile.username author
