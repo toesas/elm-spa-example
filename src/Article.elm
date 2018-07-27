@@ -79,6 +79,17 @@ type Article a
     = Article Slug Metadata a
 
 
+{-| Metadata about the article - its title, description, and so on.
+
+Importantly, this module's public API exposes a way to read this metadata, but
+not to alter it. This is read-only information! Only the server can alter it.
+
+If we find ourselves using any particular piece of metadata often,
+for example `title`, we could expose a convenience function like this:
+
+Article.title : Article a -> String
+
+-}
 type alias Metadata =
     { description : String
     , title : String
