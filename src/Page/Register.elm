@@ -1,5 +1,6 @@
 module Page.Register exposing (ExternalMsg(..), Model, Msg, initialModel, update, view)
 
+import Api
 import AuthToken exposing (AuthToken)
 import Browser.Navigation as Nav
 import Html exposing (..)
@@ -8,10 +9,11 @@ import Html.Events exposing (..)
 import Http
 import Json.Decode as Decode exposing (Decoder, decodeString, field, string)
 import Json.Decode.Pipeline exposing (optional)
+import Json.Encode as Encode
 import Me exposing (Me)
 import Route exposing (Route)
 import Session exposing (Session)
-import Validate exposing (Validator, ifBlank, validate)
+import Validate exposing (Valid, Validator, fromValid, ifBlank, validate)
 import Views.Form as Form
 
 
@@ -21,7 +23,12 @@ import Views.Form as Form
 
 type alias Model =
     { errors : List Error
-    , email : String
+    , form : Form
+    }
+
+
+type alias Form =
+    { email : String
     , username : String
     , password : String
     }
@@ -30,9 +37,11 @@ type alias Model =
 initialModel : Model
 initialModel =
     { errors = []
-    , email = ""
-    , username = ""
-    , password = ""
+    , form =
+        { email = ""
+        , username = ""
+        , password = ""
+        }
     }
 
 
@@ -54,7 +63,7 @@ view session model =
                                 [ text "Have an account?" ]
                             ]
                         , Form.viewErrors model.errors
-                        , viewForm
+                        , viewForm model.form
                         ]
                     ]
                 ]
@@ -62,25 +71,28 @@ view session model =
     }
 
 
-viewForm : Html Msg
-viewForm =
+viewForm : Form -> Html Msg
+viewForm form =
     Html.form [ onSubmit SubmittedForm ]
         [ Form.input
             [ class "form-control-lg"
             , placeholder "Username"
             , onInput EnteredUsername
+            , value form.username
             ]
             []
         , Form.input
             [ class "form-control-lg"
             , placeholder "Email"
             , onInput EnteredEmail
+            , value form.email
             ]
             []
         , Form.password
             [ class "form-control-lg"
             , placeholder "Password"
             , onInput EnteredPassword
+            , value form.password
             ]
             []
         , button [ class "btn btn-lg btn-primary pull-xs-right" ]
@@ -109,55 +121,42 @@ update : Nav.Key -> Msg -> Model -> ( ( Model, Cmd Msg ), ExternalMsg )
 update navKey msg model =
     case msg of
         SubmittedForm ->
-            case validate modelValidator model of
-                [] ->
-                    ( ( { model | errors = [] }
-                      , Http.send CompletedRegister (Me.register model)
-                      )
-                    , NoOp
+            ( case validate formValidator model.form of
+                Ok validForm ->
+                    ( { model | errors = [] }
+                    , Http.send CompletedRegister (register validForm)
                     )
 
-                errors ->
-                    ( ( { model | errors = errors }
-                      , Cmd.none
-                      )
-                    , NoOp
+                Err errors ->
+                    ( { model | errors = errors }
+                    , Cmd.none
                     )
-
-        EnteredEmail email ->
-            ( ( { model | email = email }
-              , Cmd.none
-              )
             , NoOp
             )
 
         EnteredUsername username ->
-            ( ( { model | username = username }
-              , Cmd.none
-              )
-            , NoOp
-            )
+            updateForm (\form -> { form | username = username }) model
+
+        EnteredEmail email ->
+            updateForm (\form -> { form | email = email }) model
 
         EnteredPassword password ->
-            ( ( { model | password = password }
-              , Cmd.none
-              )
-            , NoOp
-            )
+            updateForm (\form -> { form | password = password }) model
 
         CompletedRegister (Err error) ->
             let
-                errorMessages =
-                    case error of
-                        Http.BadStatus response ->
-                            response.body
-                                |> decodeString (field "errors" errorsDecoder)
-                                |> Result.withDefault []
+                serverErrors =
+                    List.map (\errorMessage -> ( Server, errorMessage )) <|
+                        case error of
+                            Http.BadStatus response ->
+                                response.body
+                                    |> decodeString (field "errors" errorsDecoder)
+                                    |> Result.withDefault []
 
-                        _ ->
-                            [ "unable to process registration" ]
+                            _ ->
+                                [ "unable to perform login" ]
             in
-            ( ( { model | errors = List.map (\errorMessage -> ( Form, errorMessage )) errorMessages }
+            ( ( { model | errors = List.append model.errors serverErrors }
               , Cmd.none
               )
             , NoOp
@@ -171,23 +170,31 @@ update navKey msg model =
             )
 
 
+{-| Helper function for `update`. Updates the form and returns Cmd.none and
+NoOp. Useful for recording form fields!
+-}
+updateForm : (Form -> Form) -> Model -> ( ( Model, Cmd Msg ), ExternalMsg )
+updateForm transform model =
+    ( ( { model | form = transform model.form }, Cmd.none ), NoOp )
+
+
 
 -- VALIDATION
 
 
-type Field
-    = Form
+type ErrorSource
+    = Server
     | Username
     | Email
     | Password
 
 
 type alias Error =
-    ( Field, String )
+    ( ErrorSource, String )
 
 
-modelValidator : Validator Error Model
-modelValidator =
+formValidator : Validator Error Form
+formValidator =
     Validate.all
         [ ifBlank .username ( Username, "username can't be blank." )
         , ifBlank .email ( Email, "email can't be blank." )
@@ -200,7 +207,7 @@ minPasswordChars =
     6
 
 
-passwordLength : Model -> List Error
+passwordLength : Form -> List Error
 passwordLength { password } =
     if String.length password < minPasswordChars then
         [ ( Password, "password must be at least " ++ String.fromInt minPasswordChars ++ " characters long." ) ]
@@ -224,3 +231,28 @@ optionalError fieldName =
             String.join " " [ fieldName, errorMessage ]
     in
     optional fieldName (Decode.list (Decode.map errorToString string)) []
+
+
+
+-- HTTP
+
+
+register : Valid Form -> Http.Request ( Me, AuthToken )
+register validForm =
+    let
+        form =
+            fromValid validForm
+
+        user =
+            Encode.object
+                [ ( "username", Encode.string form.username )
+                , ( "email", Encode.string form.email )
+                , ( "password", Encode.string form.password )
+                ]
+
+        body =
+            Encode.object [ ( "user", user ) ]
+                |> Http.jsonBody
+    in
+    Decode.field "user" Me.decoderWithToken
+        |> Http.post (Api.url [ "users" ]) body

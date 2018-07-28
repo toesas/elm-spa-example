@@ -16,7 +16,7 @@ import Me exposing (Me)
 import Route
 import Session exposing (Session)
 import Username as Username exposing (Username)
-import Validate exposing (Validator, ifBlank, validate)
+import Validate exposing (Valid, Validator, fromValid, ifBlank, validate)
 import Views.Form as Form
 
 
@@ -26,7 +26,12 @@ import Views.Form as Form
 
 type alias Model =
     { errors : List Error
-    , avatar : Maybe String
+    , form : Form
+    }
+
+
+type alias Form =
+    { avatar : Maybe String
     , email : String
     , bio : String
     , username : String
@@ -37,24 +42,26 @@ type alias Model =
 init : Me -> Model
 init me =
     { errors = []
-    , avatar = Avatar.toMaybeString (Me.avatar me)
-    , email = Me.email me
-    , bio = Maybe.withDefault "" (Me.bio me)
-    , username = Username.toString (Me.username me)
-    , password = Nothing
+    , form =
+        { avatar = Avatar.toMaybeString (Me.avatar me)
+        , email = Me.email me
+        , bio = Maybe.withDefault "" (Me.bio me)
+        , username = Username.toString (Me.username me)
+        , password = Nothing
+        }
     }
 
 
-{-| A model that has been validated. Only the `edit` function uses this. Its
-purpose is to prevent us from forgetting to validate the model before passing
+{-| A form that has been validated. Only the `edit` function uses this. Its
+purpose is to prevent us from forgetting to validate the form before passing
 it to `edit`.
 
-This doesn't create any guarantees that the model was actually validated. If
+This doesn't create any guarantees that the form was actually validated. If
 we wanted to do that, we'd need to move the form data into a separate module!
 
 -}
-type ValidModel
-    = Valid Model
+type ValidForm
+    = Valid Form
 
 
 
@@ -71,7 +78,7 @@ view session model =
                     [ div [ class "col-md-6 offset-md-3 col-xs-12" ]
                         [ h1 [ class "text-xs-center" ] [ text "Your Enteredtings" ]
                         , Form.viewErrors model.errors
-                        , viewForm model
+                        , viewForm model.form
                         ]
                     ]
                 ]
@@ -79,20 +86,20 @@ view session model =
     }
 
 
-viewForm : Model -> Html Msg
-viewForm model =
+viewForm : Form -> Html Msg
+viewForm form =
     Html.form [ onSubmit SubmittedForm ]
         [ fieldset []
             [ Form.input
                 [ placeholder "URL of profile picture"
-                , value (Maybe.withDefault "" model.avatar)
+                , value (Maybe.withDefault "" form.avatar)
                 , onInput EnteredImage
                 ]
                 []
             , Form.input
                 [ class "form-control-lg"
                 , placeholder "Username"
-                , value model.username
+                , value form.username
                 , onInput EnteredUsername
                 ]
                 []
@@ -100,21 +107,21 @@ viewForm model =
                 [ class "form-control-lg"
                 , placeholder "Short bio about you"
                 , attribute "rows" "8"
-                , value model.bio
+                , value form.bio
                 , onInput EnteredBio
                 ]
                 []
             , Form.input
                 [ class "form-control-lg"
                 , placeholder "Email"
-                , value model.email
+                , value form.email
                 , onInput EnteredEmail
                 ]
                 []
             , Form.password
                 [ class "form-control-lg"
                 , placeholder "Password"
-                , value (Maybe.withDefault "" model.password)
+                , value (Maybe.withDefault "" form.password)
                 , onInput EnteredPassword
                 ]
                 []
@@ -148,15 +155,15 @@ update : Nav.Key -> AuthToken -> Msg -> Model -> ( ( Model, Cmd Msg ), ExternalM
 update navKey authToken msg model =
     case msg of
         SubmittedForm ->
-            case validate modelValidator model of
-                [] ->
-                    ( edit authToken (Valid model)
+            case validate formValidator model.form of
+                Ok validForm ->
+                    ( edit authToken validForm
                         |> Http.send CompletedSave
                         |> Tuple.pair { model | errors = [] }
                     , NoOp
                     )
 
-                errors ->
+                Err errors ->
                     ( ( { model | errors = errors }
                       , Cmd.none
                       )
@@ -164,18 +171,10 @@ update navKey authToken msg model =
                     )
 
         EnteredEmail email ->
-            ( ( { model | email = email }
-              , Cmd.none
-              )
-            , NoOp
-            )
+            updateForm (\form -> { form | email = email }) model
 
         EnteredUsername username ->
-            ( ( { model | username = username }
-              , Cmd.none
-              )
-            , NoOp
-            )
+            updateForm (\form -> { form | username = username }) model
 
         EnteredPassword passwordStr ->
             let
@@ -186,18 +185,10 @@ update navKey authToken msg model =
                     else
                         Just passwordStr
             in
-            ( ( { model | password = password }
-              , Cmd.none
-              )
-            , NoOp
-            )
+            updateForm (\form -> { form | password = password }) model
 
         EnteredBio bio ->
-            ( ( { model | bio = bio }
-              , Cmd.none
-              )
-            , NoOp
-            )
+            updateForm (\form -> { form | bio = bio }) model
 
         EnteredImage avatarStr ->
             let
@@ -208,29 +199,22 @@ update navKey authToken msg model =
                     else
                         Just avatarStr
             in
-            ( ( { model | avatar = avatar }
-              , Cmd.none
-              )
-            , NoOp
-            )
+            updateForm (\form -> { form | avatar = avatar }) model
 
         CompletedSave (Err error) ->
             let
-                errorMessages =
-                    case error of
-                        Http.BadStatus response ->
-                            response.body
-                                |> decodeString (field "errors" errorsDecoder)
-                                |> Result.withDefault []
+                serverErrors =
+                    List.map (\errorMessage -> ( Server, errorMessage )) <|
+                        case error of
+                            Http.BadStatus response ->
+                                response.body
+                                    |> decodeString (field "errors" errorsDecoder)
+                                    |> Result.withDefault []
 
-                        _ ->
-                            [ "unable to save changes" ]
-
-                errors =
-                    errorMessages
-                        |> List.map (\errorMessage -> ( Form, errorMessage ))
+                            _ ->
+                                [ "unable to save changes" ]
             in
-            ( ( { model | errors = errors }
+            ( ( { model | errors = List.append model.errors serverErrors }
               , Cmd.none
               )
             , NoOp
@@ -244,12 +228,20 @@ update navKey authToken msg model =
             )
 
 
+{-| Helper function for `update`. Updates the form and returns Cmd.none and
+NoOp. Useful for recording form fields!
+-}
+updateForm : (Form -> Form) -> Model -> ( ( Model, Cmd Msg ), ExternalMsg )
+updateForm transform model =
+    ( ( { model | form = transform model.form }, Cmd.none ), NoOp )
+
+
 
 -- VALIDATION
 
 
-type Field
-    = Form
+type ErrorSource
+    = Server
     | Username
     | Email
     | Password
@@ -258,11 +250,11 @@ type Field
 
 
 type alias Error =
-    ( Field, String )
+    ( ErrorSource, String )
 
 
-modelValidator : Validator Error Model
-modelValidator =
+formValidator : Validator Error Form
+formValidator =
     Validate.all
         [ ifBlank .username ( Username, "username can't be blank." )
         , ifBlank .email ( Email, "email can't be blank." )
@@ -290,18 +282,21 @@ optionalError fieldName =
 -- HTTP
 
 
-{-| This takes a ValidModel as a reminder that it needs to have been validated
+{-| This takes a Valid Form as a reminder that it needs to have been validated
 first.
 -}
-edit : AuthToken -> ValidModel -> Http.Request Me
-edit authToken (Valid params) =
+edit : AuthToken -> Valid Form -> Http.Request Me
+edit authToken validForm =
     let
+        form =
+            fromValid validForm
+
         updates =
-            [ Just ( "username", Encode.string params.username )
-            , Just ( "email", Encode.string params.email )
-            , Just ( "bio", Encode.string params.bio )
-            , Just ( "avatar", Maybe.withDefault Encode.null (Maybe.map Encode.string params.avatar) )
-            , Maybe.map (\pass -> ( "password", Encode.string pass )) params.password
+            [ Just ( "username", Encode.string form.username )
+            , Just ( "email", Encode.string form.email )
+            , Just ( "bio", Encode.string form.bio )
+            , Just ( "avatar", Maybe.withDefault Encode.null (Maybe.map Encode.string form.avatar) )
+            , Maybe.map (\pass -> ( "password", Encode.string pass )) form.password
             ]
                 |> List.filterMap identity
 

@@ -1,4 +1,4 @@
-module Me exposing (Me, avatar, bio, decoder, decoderWithToken, email, login, register, username)
+module Me exposing (Me, avatar, bio, decoder, decoderWithToken, email, username)
 
 import Api
 import AuthToken exposing (AuthToken, withAuthorization)
@@ -52,49 +52,6 @@ avatar (Me info) =
 email : Me -> String
 email (Me info) =
     info.email
-
-
-
--- SESSION MANAGEMENT
-
-
-login : { r | email : String, password : String } -> Http.Request ( Me, AuthToken )
-login params =
-    let
-        user =
-            Encode.object
-                [ ( "email", Encode.string params.email )
-                , ( "password", Encode.string params.password )
-                ]
-
-        body =
-            Encode.object [ ( "user", user ) ]
-                |> Http.jsonBody
-    in
-    Decode.field "user" decoderWithToken
-        |> Http.post (Api.url [ "users", "login" ]) body
-
-
-
--- REGISTER
-
-
-register : { r | username : String, email : String, password : String } -> Http.Request ( Me, AuthToken )
-register params =
-    let
-        user =
-            Encode.object
-                [ ( "username", Encode.string params.username )
-                , ( "email", Encode.string params.email )
-                , ( "password", Encode.string params.password )
-                ]
-
-        body =
-            Encode.object [ ( "user", user ) ]
-                |> Http.jsonBody
-    in
-    Decode.field "user" decoderWithToken
-        |> Http.post (Api.url [ "users" ]) body
 
 
 

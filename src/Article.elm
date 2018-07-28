@@ -5,16 +5,16 @@ module Article
         , Preview
         , author
         , body
-        , create
         , delete
         , fetch
         , followAuthor
         , fromPreview
+        , fullDecoder
         , metadata
         , previewDecoder
         , slug
         , toggleFavorite
-        , update
+        , url
         )
 
 {-| The interface to the Article data structure.
@@ -23,12 +23,8 @@ This includes:
 
   - The Article type itself
   - Ways to make HTTP requests to retrieve and modify articles
-  - Ways to access parts of an article
+  - Ways to access information about an article
   - Converting between various types
-
-The constructor for Article is not exposed, and neither are its encoders
-and decoders. This means it's only possible to obtain an Article by
-using the functions exposed in this module - the HTTP requests and such.
 
 -}
 
@@ -231,7 +227,7 @@ fetch maybeToken articleSlug =
                 |> Decode.field "article"
                 |> Http.expectJson
     in
-    articleUrl articleSlug []
+    url articleSlug []
         |> HttpBuilder.get
         |> HttpBuilder.withExpect expect
         |> withAuthorization maybeToken
@@ -272,92 +268,9 @@ buildFavorite builderFromUrl articleSlug token =
             previewDecoder
                 |> Decode.field "article"
                 |> Http.expectJson
-
-        url =
-            articleUrl articleSlug [ "favorite" ]
     in
-    builderFromUrl url
+    builderFromUrl (url articleSlug [ "favorite" ])
         |> withAuthorization (Just token)
-        |> withExpect expect
-        |> HttpBuilder.toRequest
-
-
-
--- CREATE
-
-
-type alias CreateConfig record =
-    { record
-        | title : String
-        , description : String
-        , body : String
-        , tags : List String
-    }
-
-
-type alias EditConfig record =
-    { record
-        | title : String
-        , description : String
-        , body : String
-    }
-
-
-create : CreateConfig record -> AuthToken -> Http.Request (Article Full)
-create config token =
-    let
-        expect =
-            fullDecoder
-                |> Decode.field "article"
-                |> Http.expectJson
-
-        article =
-            Encode.object
-                [ ( "title", Encode.string config.title )
-                , ( "description", Encode.string config.description )
-                , ( "body", Encode.string config.body )
-                , ( "tagList", Encode.list Encode.string config.tags )
-                ]
-
-        jsonBody =
-            Encode.object [ ( "article", article ) ]
-                |> Http.jsonBody
-    in
-    Api.url [ "articles" ]
-        |> HttpBuilder.post
-        |> withAuthorization (Just token)
-        |> withBody jsonBody
-        |> withExpect expect
-        |> HttpBuilder.toRequest
-
-
-
--- UPDATE
-
-
-update : Slug -> EditConfig record -> AuthToken -> Http.Request (Article Full)
-update articleSlug config token =
-    let
-        expect =
-            fullDecoder
-                |> Decode.field "article"
-                |> Http.expectJson
-
-        article =
-            Encode.object
-                [ ( "title", Encode.string config.title )
-                , ( "description", Encode.string config.description )
-                , ( "body", Encode.string config.body )
-                ]
-
-        jsonBody =
-            Encode.object [ ( "article", article ) ]
-                |> Http.jsonBody
-    in
-    articleUrl articleSlug []
-        |> HttpBuilder.put
-        |> withAuthorization (Just token)
-        |> withBody jsonBody
         |> withExpect expect
         |> HttpBuilder.toRequest
 
@@ -368,7 +281,7 @@ update articleSlug config token =
 
 delete : Slug -> AuthToken -> Http.Request ()
 delete articleSlug token =
-    articleUrl articleSlug []
+    url articleSlug []
         |> HttpBuilder.delete
         |> withAuthorization (Just token)
         |> HttpBuilder.toRequest
@@ -378,8 +291,8 @@ delete articleSlug token =
 -- URLS
 
 
-articleUrl : Slug -> List String -> String
-articleUrl articleSlug paths =
+url : Slug -> List String -> String
+url articleSlug paths =
     allArticlesUrl (Slug.toString articleSlug :: paths)
 
 

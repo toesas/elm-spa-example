@@ -1,20 +1,24 @@
 module Page.Article.Editor exposing (Model, Msg, initEdit, initNew, update, view)
 
+import Api
 import Article exposing (Article, Full)
 import Article.Body exposing (Body)
 import Article.Slug as Slug exposing (Slug)
-import AuthToken exposing (AuthToken)
+import AuthToken exposing (AuthToken, withAuthorization)
 import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (attribute, class, disabled, href, id, placeholder, type_, value)
 import Html.Events exposing (onInput, onSubmit)
 import Http
+import HttpBuilder exposing (withBody, withExpect)
+import Json.Decode as Decode
+import Json.Encode as Encode
 import Page.Errored exposing (PageLoadError, pageLoadError)
 import Profile exposing (Profile)
 import Route
 import Session exposing (Session)
 import Task exposing (Task)
-import Validate exposing (Validator, ifBlank, validate)
+import Validate exposing (Valid, Validator, fromValid, ifBlank, validate)
 import Views.Form as Form
 import Views.Page as Page
 
@@ -24,13 +28,18 @@ import Views.Page as Page
 
 
 type alias Model =
-    { errors : List Error
-    , editingArticle : Maybe Slug
-    , title : String
+    { editingArticle : Maybe Slug
+    , isSaving : Bool
+    , errors : List Error
+    , form : Form
+    }
+
+
+type alias Form =
+    { title : String
     , body : String
     , description : String
-    , tags : List String
-    , isSaving : Bool
+    , tags : String
     }
 
 
@@ -38,11 +47,13 @@ initNew : Model
 initNew =
     { errors = []
     , editingArticle = Nothing
-    , title = ""
-    , body = ""
-    , description = ""
-    , tags = []
     , isSaving = False
+    , form =
+        { title = ""
+        , body = ""
+        , description = ""
+        , tags = ""
+        }
     }
 
 
@@ -59,11 +70,13 @@ initEdit maybeToken slug =
                 in
                 { errors = []
                 , editingArticle = Just slug
-                , title = meta.title
-                , body = Article.Body.toMarkdownString (Article.body article)
-                , description = meta.description
-                , tags = meta.tags
                 , isSaving = False
+                , form =
+                    { title = meta.title
+                    , body = Article.Body.toMarkdownString (Article.body article)
+                    , description = meta.description
+                    , tags = String.join " " meta.tags
+                    }
                 }
             )
 
@@ -81,7 +94,10 @@ view model =
                 [ div [ class "row" ]
                     [ div [ class "col-md-10 offset-md-1 col-xs-12" ]
                         [ Form.viewErrors model.errors
-                        , viewForm model
+                        , viewForm model.form
+                            { isEditing = model.editingArticle /= Nothing
+                            , isSaving = model.isSaving
+                            }
                         ]
                     ]
                 ]
@@ -89,12 +105,9 @@ view model =
     }
 
 
-viewForm : Model -> Html Msg
-viewForm model =
+viewForm : Form -> { isEditing : Bool, isSaving : Bool } -> Html Msg
+viewForm form { isEditing, isSaving } =
     let
-        isEditing =
-            model.editingArticle /= Nothing
-
         saveButtonText =
             if isEditing then
                 "Update Article"
@@ -108,29 +121,29 @@ viewForm model =
                 [ class "form-control-lg"
                 , placeholder "Article Title"
                 , onInput EnteredTitle
-                , value model.title
+                , value form.title
                 ]
                 []
             , Form.input
                 [ placeholder "What's this article about?"
                 , onInput EnteredDescription
-                , value model.description
+                , value form.description
                 ]
                 []
             , Form.textarea
                 [ placeholder "Write your article (in markdown)"
                 , attribute "rows" "8"
                 , onInput EnteredBody
-                , value model.body
+                , value form.body
                 ]
                 []
             , Form.input
                 [ placeholder "Enter tags"
                 , onInput EnteredTags
-                , value (String.join " " model.tags)
+                , value form.tags
                 ]
                 []
-            , button [ class "btn btn-lg pull-xs-right btn-primary", disabled model.isSaving ]
+            , button [ class "btn btn-lg pull-xs-right btn-primary", disabled isSaving ]
                 [ text saveButtonText ]
             ]
         ]
@@ -154,35 +167,33 @@ update : AuthToken -> Nav.Key -> Msg -> Model -> ( Model, Cmd Msg )
 update token navKey msg model =
     case msg of
         ClickedSave ->
-            case validate modelValidator model of
-                [] ->
-                    case model.editingArticle of
+            case validate formValidator model.form of
+                Ok validForm ->
+                    ( { model | errors = [], isSaving = True }
+                    , case model.editingArticle of
                         Nothing ->
-                            token
-                                |> Article.create model
+                            create validForm token
                                 |> Http.send CompletedCreate
-                                |> Tuple.pair { model | errors = [], isSaving = True }
 
                         Just slug ->
-                            token
-                                |> Article.update slug model
+                            edit slug validForm token
                                 |> Http.send CompletedEdit
-                                |> Tuple.pair { model | errors = [], isSaving = True }
+                    )
 
-                errors ->
+                Err errors ->
                     ( { model | errors = errors }, Cmd.none )
 
         EnteredTitle title ->
-            ( { model | title = title }, Cmd.none )
+            updateForm (\form -> { form | title = title }) model
 
         EnteredDescription description ->
-            ( { model | description = description }, Cmd.none )
+            updateForm (\form -> { form | description = description }) model
 
         EnteredTags tags ->
-            ( { model | tags = tagsFromString tags }, Cmd.none )
+            updateForm (\form -> { form | tags = tags }) model
 
         EnteredBody body ->
-            ( { model | body = body }, Cmd.none )
+            updateForm (\form -> { form | body = body }) model
 
         CompletedCreate (Ok article) ->
             Route.Article (Article.slug article)
@@ -191,7 +202,7 @@ update token navKey msg model =
 
         CompletedCreate (Err error) ->
             ( { model
-                | errors = model.errors ++ [ ( Form, "Server error while attempting to publish article" ) ]
+                | errors = model.errors ++ [ ( Server, "Server error while attempting to publish article" ) ]
                 , isSaving = False
               }
             , Cmd.none
@@ -204,29 +215,37 @@ update token navKey msg model =
 
         CompletedEdit (Err error) ->
             ( { model
-                | errors = model.errors ++ [ ( Form, "Server error while attempting to save article" ) ]
+                | errors = model.errors ++ [ ( Server, "Server error while attempting to save article" ) ]
                 , isSaving = False
               }
             , Cmd.none
             )
 
 
+{-| Helper function for `update`. Updates the form and returns Cmd.none.
+Useful for recording form fields!
+-}
+updateForm : (Form -> Form) -> Model -> ( Model, Cmd Msg )
+updateForm transform model =
+    ( { model | form = transform model.form }, Cmd.none )
+
+
 
 -- VALIDATION
 
 
-type Field
-    = Form
+type ErrorSource
+    = Server
     | Title
     | Body
 
 
 type alias Error =
-    ( Field, String )
+    ( ErrorSource, String )
 
 
-modelValidator : Validator Error Model
-modelValidator =
+formValidator : Validator Error Form
+formValidator =
     Validate.all
         [ ifBlank .title ( Title, "title can't be blank." )
         , ifBlank .body ( Body, "body can't be blank." )
@@ -234,7 +253,38 @@ modelValidator =
 
 
 
--- INTERNAL
+-- HTTP
+
+
+create : Valid Form -> AuthToken -> Http.Request (Article Full)
+create validForm token =
+    let
+        form =
+            fromValid validForm
+
+        expect =
+            Article.fullDecoder
+                |> Decode.field "article"
+                |> Http.expectJson
+
+        article =
+            Encode.object
+                [ ( "title", Encode.string form.title )
+                , ( "description", Encode.string form.description )
+                , ( "body", Encode.string form.body )
+                , ( "tagList", Encode.list Encode.string (tagsFromString form.tags) )
+                ]
+
+        jsonBody =
+            Encode.object [ ( "article", article ) ]
+                |> Http.jsonBody
+    in
+    Api.url [ "articles" ]
+        |> HttpBuilder.post
+        |> withAuthorization (Just token)
+        |> withBody jsonBody
+        |> withExpect expect
+        |> HttpBuilder.toRequest
 
 
 tagsFromString : String -> List String
@@ -243,3 +293,33 @@ tagsFromString str =
         |> String.split " "
         |> List.map String.trim
         |> List.filter (not << String.isEmpty)
+
+
+edit : Slug -> Valid Form -> AuthToken -> Http.Request (Article Full)
+edit articleSlug validForm token =
+    let
+        form =
+            fromValid validForm
+
+        expect =
+            Article.fullDecoder
+                |> Decode.field "article"
+                |> Http.expectJson
+
+        article =
+            Encode.object
+                [ ( "title", Encode.string form.title )
+                , ( "description", Encode.string form.description )
+                , ( "body", Encode.string form.body )
+                ]
+
+        jsonBody =
+            Encode.object [ ( "article", article ) ]
+                |> Http.jsonBody
+    in
+    Article.url articleSlug []
+        |> HttpBuilder.put
+        |> withAuthorization (Just token)
+        |> withBody jsonBody
+        |> withExpect expect
+        |> HttpBuilder.toRequest
