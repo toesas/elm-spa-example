@@ -1,14 +1,17 @@
 module Page.Settings exposing (ExternalMsg(..), Model, Msg, init, update, view)
 
-import AuthToken exposing (AuthToken)
+import Api
+import AuthToken exposing (AuthToken, withAuthorization)
 import Avatar
 import Browser.Navigation as Nav
 import Html exposing (Html, button, div, fieldset, h1, input, text, textarea)
 import Html.Attributes exposing (attribute, class, placeholder, type_, value)
 import Html.Events exposing (onInput, onSubmit)
 import Http
+import HttpBuilder
 import Json.Decode as Decode exposing (Decoder, decodeString, field, list, string)
 import Json.Decode.Pipeline exposing (optional)
+import Json.Encode as Encode
 import Me exposing (Me)
 import Route
 import Session exposing (Session)
@@ -23,7 +26,7 @@ import Views.Form as Form
 
 type alias Model =
     { errors : List Error
-    , image : Maybe String
+    , avatar : Maybe String
     , email : String
     , bio : String
     , username : String
@@ -34,12 +37,24 @@ type alias Model =
 init : Me -> Model
 init me =
     { errors = []
-    , image = Avatar.toMaybeString (Me.image me)
+    , avatar = Avatar.toMaybeString (Me.avatar me)
     , email = Me.email me
     , bio = Maybe.withDefault "" (Me.bio me)
     , username = Username.toString (Me.username me)
     , password = Nothing
     }
+
+
+{-| A model that has been validated. Only the `edit` function uses this. Its
+purpose is to prevent us from forgetting to validate the model before passing
+it to `edit`.
+
+This doesn't create any guarantees that the model was actually validated. If
+we wanted to do that, we'd need to move the form data into a separate module!
+
+-}
+type ValidModel
+    = Valid Model
 
 
 
@@ -70,7 +85,7 @@ viewForm model =
         [ fieldset []
             [ Form.input
                 [ placeholder "URL of profile picture"
-                , value (Maybe.withDefault "" model.image)
+                , value (Maybe.withDefault "" model.avatar)
                 , onInput EnteredImage
                 ]
                 []
@@ -135,7 +150,7 @@ update navKey authToken msg model =
         SubmittedForm ->
             case validate modelValidator model of
                 [] ->
-                    ( Me.edit authToken model
+                    ( edit authToken (Valid model)
                         |> Http.send CompletedSave
                         |> Tuple.pair { model | errors = [] }
                     , NoOp
@@ -184,16 +199,16 @@ update navKey authToken msg model =
             , NoOp
             )
 
-        EnteredImage imageStr ->
+        EnteredImage avatarStr ->
             let
-                image =
-                    if String.isEmpty imageStr then
+                avatar =
+                    if String.isEmpty avatarStr then
                         Nothing
 
                     else
-                        Just imageStr
+                        Just avatarStr
             in
-            ( ( { model | image = image }
+            ( ( { model | avatar = avatar }
               , Cmd.none
               )
             , NoOp
@@ -269,3 +284,40 @@ optionalError fieldName =
             String.join " " [ fieldName, errorMessage ]
     in
     optional fieldName (list (Decode.map errorToString string)) []
+
+
+
+-- HTTP
+
+
+{-| This takes a ValidModel as a reminder that it needs to have been validated
+first.
+-}
+edit : AuthToken -> ValidModel -> Http.Request Me
+edit authToken (Valid params) =
+    let
+        updates =
+            [ Just ( "username", Encode.string params.username )
+            , Just ( "email", Encode.string params.email )
+            , Just ( "bio", Encode.string params.bio )
+            , Just ( "avatar", Maybe.withDefault Encode.null (Maybe.map Encode.string params.avatar) )
+            , Maybe.map (\pass -> ( "password", Encode.string pass )) params.password
+            ]
+                |> List.filterMap identity
+
+        body =
+            ( "user", Encode.object updates )
+                |> List.singleton
+                |> Encode.object
+                |> Http.jsonBody
+
+        expect =
+            Decode.field "user" Me.decoder
+                |> Http.expectJson
+    in
+    Api.url [ "user" ]
+        |> HttpBuilder.put
+        |> HttpBuilder.withExpect expect
+        |> HttpBuilder.withBody body
+        |> withAuthorization (Just authToken)
+        |> HttpBuilder.toRequest

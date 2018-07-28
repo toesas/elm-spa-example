@@ -171,7 +171,7 @@ viewAddComment postingDisabled maybeMe =
                         []
                     ]
                 , div [ class "card-footer" ]
-                    [ img [ class "comment-author-img", Avatar.src (Me.image me) ] []
+                    [ img [ class "comment-author-img", Avatar.src (Me.avatar me) ] []
                     , button
                         [ class "btn btn-sm btn-primary"
                         , disabled postingDisabled

@@ -26,7 +26,8 @@ This includes:
   - Ways to access parts of an article
   - Converting between various types
 
-The constructor for Article is not exposed, and neither are its encoders and decoders. This means it's only possible to obtain an Article by
+The constructor for Article is not exposed, and neither are its encoders
+and decoders. This means it's only possible to obtain an Article by
 using the functions exposed in this module - the HTTP requests and such.
 
 -}
@@ -77,13 +78,13 @@ Those articles are useful to the feed, but not to the individual article view.
 
 -}
 type Article a
-    = Article Slug Profile Metadata a
+    = Article Internals a
 
 
 {-| Metadata about the article - its title, description, and so on.
 
 Importantly, this module's public API exposes a way to read this metadata, but
-not to alter it. There is only one
+not to alter it. This is read-only information!
 
 If we find ourselves using any particular piece of metadata often,
 for example `title`, we could expose a convenience function like this:
@@ -109,6 +110,7 @@ as I did originally. This record is not a bad way to do it, by any means,
 but if this seems at odds with <https://youtu.be/x1FU3e0sT1I> - now you know why!
 See commit c2640ae3abd60262cdaafe6adee3f41d84cd85c3 for how it looked before.
 )
+
 -}
 type alias Metadata =
     { description : String
@@ -117,6 +119,13 @@ type alias Metadata =
     , createdAt : Time.Posix
     , favorited : Bool
     , favoritesCount : Int
+    }
+
+
+type alias Internals =
+    { slug : Slug
+    , author : Profile
+    , metadata : Metadata
     }
 
 
@@ -133,37 +142,44 @@ type Full
 
 
 author : Article a -> Profile
-author (Article _ val _ _) =
-    val
+author (Article internals _) =
+    internals.author
 
 
 metadata : Article a -> Metadata
-metadata (Article _ _ val _) =
-    val
+metadata (Article internals _) =
+    internals.metadata
 
 
 slug : Article a -> Slug
-slug (Article val _ _ _) =
-    val
+slug (Article internals _) =
+    internals.slug
 
 
 body : Article Full -> Body
-body (Article _ _ _ (Full val)) =
-    val
+body (Article _ (Full extraInfo)) =
+    extraInfo
 
 
 
 -- TRANSFORM
 
 
+{-| This is the only way you can transform an existing article:
+you can follow its author. All other article data necessarily comes from the server!
+
+We can tell this for sure by looking at the types of the exposed functions
+in this module.
+
+-}
 followAuthor : Bool -> Article a -> Article a
-followAuthor isFollowing (Article slugVal authorVal meta extras) =
-    Article slugVal (Profile.follow isFollowing authorVal) meta extras
+followAuthor isFollowing (Article info extras) =
+    Article { info | author = Profile.follow isFollowing info.author } extras
 
 
 fromPreview : Body -> Article Preview -> Article Full
-fromPreview newBody (Article newSlug newAuthor newMetadata Preview) =
-    Article newSlug newAuthor newMetadata (Full newBody)
+fromPreview newBody (Article info Preview) =
+    Article info (Full newBody)
 
 
 
@@ -173,19 +189,23 @@ fromPreview newBody (Article newSlug newAuthor newMetadata Preview) =
 previewDecoder : Decoder (Article Preview)
 previewDecoder =
     Decode.succeed Article
-        |> required "slug" Slug.decoder
-        |> required "author" Profile.decoder
-        |> custom metadataDecoder
+        |> custom internalsDecoder
         |> hardcoded Preview
 
 
 fullDecoder : Decoder (Article Full)
 fullDecoder =
     Decode.succeed Article
+        |> custom internalsDecoder
+        |> required "body" (Decode.map Full Body.decoder)
+
+
+internalsDecoder : Decoder Internals
+internalsDecoder =
+    Decode.succeed Internals
         |> required "slug" Slug.decoder
         |> required "author" Profile.decoder
         |> custom metadataDecoder
-        |> required "body" (Decode.map Full Body.decoder)
 
 
 metadataDecoder : Decoder Metadata
@@ -223,12 +243,12 @@ fetch maybeToken articleSlug =
 
 
 toggleFavorite : Article a -> AuthToken -> Http.Request (Article Preview)
-toggleFavorite (Article slugVal _ { favorited } _) authToken =
-    if favorited then
-        unfavorite slugVal authToken
+toggleFavorite (Article info _) authToken =
+    if info.metadata.favorited then
+        unfavorite info.slug authToken
 
     else
-        favorite slugVal authToken
+        favorite info.slug authToken
 
 
 favorite : Slug -> AuthToken -> Http.Request (Article Preview)

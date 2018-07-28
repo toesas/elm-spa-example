@@ -33,7 +33,7 @@ init zone user =
 
 
 
--- MODIFY
+-- TRANSFORM
 
 
 withTimeZone : Time.Zone -> Session -> Session
@@ -42,7 +42,7 @@ withTimeZone zone (Session info) =
 
 
 
--- ACCESS
+-- INFO
 
 
 isLoggedIn : Session -> Bool
@@ -103,7 +103,7 @@ store myself authToken =
         [ ( "email", Encode.string (Me.email myself) )
         , ( "username", Username.encode (Me.username myself) )
         , ( "bio", Maybe.withDefault Encode.null (Maybe.map Encode.string (Me.bio myself)) )
-        , ( "image", Avatar.encode (Me.image myself) )
+        , ( "image", Avatar.encode (Me.avatar myself) )
         , ( "token", AuthToken.encode authToken )
         ]
         |> Encode.encode 0

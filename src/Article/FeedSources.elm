@@ -91,7 +91,7 @@ isNotTag currentSource =
 
 
 
--- ACCESSING
+-- READ
 
 
 selected : FeedSources -> Source

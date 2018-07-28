@@ -21,10 +21,10 @@ import Username exposing (Username)
 
 
 type Profile
-    = Profile ProfileRecord
+    = Profile Internals
 
 
-type alias ProfileRecord =
+type alias Internals =
     { username : Username
     , bio : Maybe String
     , avatar : Avatar
@@ -116,7 +116,7 @@ buildFollow builderFromUrl uname token =
 
 decoder : Decoder Profile
 decoder =
-    Decode.succeed ProfileRecord
+    Decode.succeed Internals
         |> required "username" Username.decoder
         |> required "bio" (Decode.nullable Decode.string)
         |> required "image" Avatar.decoder

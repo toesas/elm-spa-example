@@ -42,7 +42,7 @@ type alias CommentRecord =
 
 
 
--- ACCESS
+-- INFO
 
 
 id : Comment -> CommentId

@@ -88,7 +88,7 @@ viewSignIn page maybeMe =
             , linkTo Route.Settings [ i [ class "ion-gear-a" ] [], text " Settings" ]
             , linkTo
                 (Route.Profile (Me.username me))
-                [ img [ class "user-pic", Avatar.src (Me.image me) ] []
+                [ img [ class "user-pic", Avatar.src (Me.avatar me) ] []
                 , Username.toHtml (Me.username me)
                 ]
             , linkTo Route.Logout [ text "Sign out" ]

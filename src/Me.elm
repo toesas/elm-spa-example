@@ -1,4 +1,4 @@
-module Me exposing (Me, bio, decoder, decoderWithToken, edit, email, image, login, register, username)
+module Me exposing (Me, avatar, bio, decoder, decoderWithToken, email, login, register, username)
 
 import Api
 import AuthToken exposing (AuthToken, withAuthorization)
@@ -19,19 +19,19 @@ Contrast with Profile, which is a user whose profile you're viewing.
 
 -}
 type Me
-    = Me MeRecord
+    = Me Internals
 
 
-type alias MeRecord =
+type alias Internals =
     { username : Username
     , bio : Maybe String
-    , image : Avatar
+    , avatar : Avatar
     , email : String
     }
 
 
 
--- ACCESS
+-- INFO
 
 
 username : Me -> Username
@@ -44,9 +44,9 @@ bio (Me info) =
     info.bio
 
 
-image : Me -> Avatar
-image (Me info) =
-    info.image
+avatar : Me -> Avatar
+avatar (Me info) =
+    info.avatar
 
 
 email : Me -> String
@@ -98,59 +98,15 @@ register params =
 
 
 
--- EDIT
-
-
-edit :
-    AuthToken
-    ->
-        { r
-            | username : String
-            , email : String
-            , bio : String
-            , password : Maybe String
-            , image : Maybe String
-        }
-    -> Http.Request Me
-edit authToken params =
-    let
-        updates =
-            [ Just ( "username", Encode.string params.username )
-            , Just ( "email", Encode.string params.email )
-            , Just ( "bio", Encode.string params.bio )
-            , Just ( "image", Maybe.withDefault Encode.null (Maybe.map Encode.string params.image) )
-            , Maybe.map (\pass -> ( "password", Encode.string pass )) params.password
-            ]
-                |> List.filterMap identity
-
-        body =
-            ( "user", Encode.object updates )
-                |> List.singleton
-                |> Encode.object
-                |> Http.jsonBody
-
-        expect =
-            Decode.field "user" decoder
-                |> Http.expectJson
-    in
-    Api.url [ "user" ]
-        |> HttpBuilder.put
-        |> HttpBuilder.withExpect expect
-        |> HttpBuilder.withBody body
-        |> withAuthorization (Just authToken)
-        |> HttpBuilder.toRequest
-
-
-
 -- SERIALIZATION
 
 
 decoder : Decoder Me
 decoder =
-    Decode.succeed MeRecord
+    Decode.succeed Internals
         |> required "username" Username.decoder
         |> required "bio" (Decode.nullable Decode.string)
-        |> required "image" Avatar.decoder
+        |> required "avatar" Avatar.decoder
         |> required "email" Decode.string
         |> Decode.map Me
 
