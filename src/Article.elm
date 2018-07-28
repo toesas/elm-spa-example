@@ -5,7 +5,6 @@ module Article
         , Preview
         , author
         , body
-        , delete
         , fetch
         , followAuthor
         , fromPreview
@@ -272,18 +271,6 @@ buildFavorite builderFromUrl articleSlug token =
     builderFromUrl (url articleSlug [ "favorite" ])
         |> withAuthorization (Just token)
         |> withExpect expect
-        |> HttpBuilder.toRequest
-
-
-
--- DELETE
-
-
-delete : Slug -> AuthToken -> Http.Request ()
-delete articleSlug token =
-    url articleSlug []
-        |> HttpBuilder.delete
-        |> withAuthorization (Just token)
         |> HttpBuilder.toRequest
 
 

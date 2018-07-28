@@ -7,7 +7,7 @@ import Article exposing (Article, Full)
 import Article.Body
 import Article.Comment as Comment exposing (Comment)
 import Article.Slug as Slug exposing (Slug)
-import AuthToken exposing (AuthToken)
+import AuthToken exposing (AuthToken, withAuthorization)
 import Avatar
 import Browser.Navigation as Nav
 import CommentId exposing (CommentId)
@@ -15,6 +15,7 @@ import Html exposing (..)
 import Html.Attributes exposing (attribute, class, disabled, href, id, placeholder)
 import Html.Events exposing (onClick, onInput, onSubmit)
 import Http
+import HttpBuilder exposing (RequestBuilder, withBody, withExpect, withQueryParams)
 import Me exposing (Me)
 import Page.Errored exposing (PageLoadError, pageLoadError)
 import Profile exposing (Profile)
@@ -376,7 +377,7 @@ update navKey session msg model =
             let
                 cmdFromAuth authToken =
                     authToken
-                        |> Article.delete (Article.slug model.article)
+                        |> delete (Article.slug model.article)
                         |> Http.send CompletedDeleteArticle
             in
             session
@@ -390,6 +391,18 @@ update navKey session msg model =
             ( { model | errors = model.errors ++ [ "Server error while trying to delete article." ] }
             , Cmd.none
             )
+
+
+
+-- HTTP
+
+
+delete : Slug -> AuthToken -> Http.Request ()
+delete slug token =
+    Article.url slug []
+        |> HttpBuilder.delete
+        |> withAuthorization (Just token)
+        |> HttpBuilder.toRequest
 
 
 
