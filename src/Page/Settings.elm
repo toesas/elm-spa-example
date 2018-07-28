@@ -204,15 +204,9 @@ update navKey authToken msg model =
         CompletedSave (Err error) ->
             let
                 serverErrors =
-                    List.map (\errorMessage -> ( Server, errorMessage )) <|
-                        case error of
-                            Http.BadStatus response ->
-                                response.body
-                                    |> decodeString (field "errors" errorsDecoder)
-                                    |> Result.withDefault []
-
-                            _ ->
-                                [ "unable to save changes" ]
+                    error
+                        |> Api.listErrors "errors" errorsDecoder
+                        |> List.map (\errorMessage -> ( Server, errorMessage ))
             in
             ( ( { model | errors = List.append model.errors serverErrors }
               , Cmd.none
@@ -295,7 +289,7 @@ edit authToken validForm =
             [ Just ( "username", Encode.string form.username )
             , Just ( "email", Encode.string form.email )
             , Just ( "bio", Encode.string form.bio )
-            , Just ( "avatar", Maybe.withDefault Encode.null (Maybe.map Encode.string form.avatar) )
+            , Just ( "image", Maybe.withDefault Encode.null (Maybe.map Encode.string form.avatar) )
             , Maybe.map (\pass -> ( "password", Encode.string pass )) form.password
             ]
                 |> List.filterMap identity

@@ -63,7 +63,7 @@ decoder =
     Decode.succeed Internals
         |> required "username" Username.decoder
         |> required "bio" (Decode.nullable Decode.string)
-        |> required "avatar" Avatar.decoder
+        |> required "image" Avatar.decoder
         |> required "email" Decode.string
         |> Decode.map Me
 

@@ -146,15 +146,9 @@ update navKey msg model =
         CompletedRegister (Err error) ->
             let
                 serverErrors =
-                    List.map (\errorMessage -> ( Server, errorMessage )) <|
-                        case error of
-                            Http.BadStatus response ->
-                                response.body
-                                    |> decodeString (field "errors" errorsDecoder)
-                                    |> Result.withDefault []
-
-                            _ ->
-                                [ "unable to perform login" ]
+                    error
+                        |> Api.listErrors "errors" errorsDecoder
+                        |> List.map (\errorMessage -> ( Server, errorMessage ))
             in
             ( ( { model | errors = List.append model.errors serverErrors }
               , Cmd.none
