@@ -192,10 +192,7 @@ viewCurrentPage session isLoading page =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.batch
-        [ pageSubscriptions (getCurrentPage model.pageState)
-        , Sub.map ChangedSession (Session.changes (Session.timeZone model.session))
-        ]
+    pageSubscriptions (getCurrentPage model.pageState)
 
 
 getCurrentPage : PageState -> CurrentPage
@@ -248,7 +245,6 @@ pageSubscriptions page =
 
 type Msg
     = ChangedRoute (Maybe Route)
-    | ChangedSession Session
     | ChangedUrl Url
     | ClickedLink Browser.UrlRequest
     | LoadedArticle (Result PageLoadError Article.Model)
@@ -415,21 +411,6 @@ updateCurrentPage page msg model =
         ( LoadedEditArticle slug (Err error), _ ) ->
             ( { model | pageState = Loaded (Errored error) }, Cmd.none )
 
-        ( ChangedSession newSession, _ ) ->
-            let
-                cmd =
-                    -- If we just signed out, then redirect to Home.
-                    case ( Session.token session, Session.token newSession ) of
-                        ( Just _, Nothing ) ->
-                            Route.replaceUrl model.navKey Route.Home
-
-                        ( _, _ ) ->
-                            Cmd.none
-            in
-            ( { model | session = newSession }
-            , cmd
-            )
-
         ( GotSettingsMsg subMsg, Settings subModel ) ->
             case Session.token model.session of
                 Just authToken ->
@@ -437,22 +418,26 @@ updateCurrentPage page msg model =
                         ( ( pageModel, cmd ), msgFromPage ) =
                             Settings.update model.navKey authToken subMsg subModel
 
-                        newModel =
-                            case msgFromPage of
-                                Settings.NoOp ->
-                                    model
+                        pageState =
+                            Loaded (Settings pageModel)
 
-                                Settings.ChangedMe me ->
-                                    { model
-                                        | session =
-                                            Session.init
-                                                (Session.timeZone model.session)
-                                                (Just ( me, authToken ))
-                                    }
+                        pageCmd =
+                            Cmd.map GotSettingsMsg cmd
                     in
-                    ( { newModel | pageState = Loaded (Settings pageModel) }
-                    , Cmd.map GotSettingsMsg cmd
-                    )
+                    case msgFromPage of
+                        Settings.NoOp ->
+                            ( { model | pageState = pageState }, pageCmd )
+
+                        Settings.ChangedMe me ->
+                            ( { model
+                                | pageState = pageState
+                                , session =
+                                    Session.init
+                                        (Session.timeZone model.session)
+                                        (Just ( me, authToken ))
+                              }
+                            , Cmd.batch [ pageCmd, Session.store ( me, authToken ) ]
+                            )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -462,44 +447,52 @@ updateCurrentPage page msg model =
                 ( ( pageModel, cmd ), msgFromPage ) =
                     Login.update model.navKey subMsg subModel
 
-                newModel =
-                    case msgFromPage of
-                        Login.NoOp ->
-                            model
+                pageState =
+                    Loaded (Login pageModel)
 
-                        Login.ChangedMeAndToken pair ->
-                            { model
-                                | session =
-                                    Session.init
-                                        (Session.timeZone model.session)
-                                        (Just pair)
-                            }
+                pageCmd =
+                    Cmd.map GotLoginMsg cmd
             in
-            ( { newModel | pageState = Loaded (Login pageModel) }
-            , Cmd.map GotLoginMsg cmd
-            )
+            case msgFromPage of
+                Login.NoOp ->
+                    ( { model | pageState = pageState }, pageCmd )
+
+                Login.ChangedMeAndToken pair ->
+                    ( { model
+                        | pageState = pageState
+                        , session =
+                            Session.init
+                                (Session.timeZone model.session)
+                                (Just pair)
+                      }
+                    , Cmd.batch [ pageCmd, Session.store pair ]
+                    )
 
         ( GotRegisterMsg subMsg, Register subModel ) ->
             let
                 ( ( pageModel, cmd ), msgFromPage ) =
                     Register.update model.navKey subMsg subModel
 
-                newModel =
-                    case msgFromPage of
-                        Register.NoOp ->
-                            model
+                pageCmd =
+                    Cmd.map GotRegisterMsg cmd
 
-                        Register.ChangedMeAndToken pair ->
-                            { model
-                                | session =
-                                    Session.init
-                                        (Session.timeZone model.session)
-                                        (Just pair)
-                            }
+                pageState =
+                    Loaded (Register pageModel)
             in
-            ( { newModel | pageState = Loaded (Register pageModel) }
-            , Cmd.map GotRegisterMsg cmd
-            )
+            case msgFromPage of
+                Register.NoOp ->
+                    ( { model | pageState = pageState }, pageCmd )
+
+                Register.ChangedMeAndToken pair ->
+                    ( { model
+                        | pageState = pageState
+                        , session =
+                            Session.init
+                                (Session.timeZone model.session)
+                                (Just pair)
+                      }
+                    , Cmd.batch [ pageCmd, Session.store pair ]
+                    )
 
         ( GotHomeMsg subMsg, Home subModel ) ->
             toPage Home GotHomeMsg (Home.update (Session.token session)) subMsg subModel

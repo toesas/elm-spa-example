@@ -141,6 +141,7 @@ update navKey msg model =
                     error
                         |> Api.listErrors "errors" errorsDecoder
                         |> List.map (\errorMessage -> ( Server, errorMessage ))
+                        |> List.append model.errors
             in
             ( ( { model | errors = List.append model.errors serverErrors }
               , Cmd.none
@@ -148,10 +149,8 @@ update navKey msg model =
             , NoOp
             )
 
-        CompletedLogin (Ok (( me, authToken ) as pair)) ->
-            ( ( model
-              , Cmd.batch [ Session.store me authToken, Route.replaceUrl navKey Route.Home ]
-              )
+        CompletedLogin (Ok pair) ->
+            ( ( model, Route.replaceUrl navKey Route.Home )
             , ChangedMeAndToken pair
             )
 

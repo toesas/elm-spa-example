@@ -156,10 +156,8 @@ update navKey msg model =
             , NoOp
             )
 
-        CompletedRegister (Ok (( me, authToken ) as pair)) ->
-            ( ( model
-              , Cmd.batch [ Session.store me authToken, Route.replaceUrl navKey Route.Home ]
-              )
+        CompletedRegister (Ok pair) ->
+            ( ( model, Route.replaceUrl navKey Route.Home )
             , ChangedMeAndToken pair
             )
 

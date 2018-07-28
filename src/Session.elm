@@ -97,8 +97,8 @@ attempt attemptedCmd toCmd session =
 -- STORE
 
 
-store : Me -> AuthToken -> Cmd msg
-store myself authToken =
+store : ( Me, AuthToken ) -> Cmd msg
+store ( myself, authToken ) =
     Encode.object
         [ ( "email", Encode.string (Me.email myself) )
         , ( "username", Username.encode (Me.username myself) )

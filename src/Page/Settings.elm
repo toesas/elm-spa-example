@@ -216,7 +216,7 @@ update navKey authToken msg model =
 
         CompletedSave (Ok me) ->
             ( ( model
-              , Cmd.batch [ Session.store me authToken, Route.replaceUrl navKey Route.Home ]
+              , Route.replaceUrl navKey Route.Home
               )
             , ChangedMe me
             )
