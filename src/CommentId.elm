@@ -21,7 +21,7 @@ decoder =
 
 
 
--- CONVERT
+-- TRANSFORM
 
 
 toString : CommentId -> String

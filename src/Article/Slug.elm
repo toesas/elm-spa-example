@@ -27,7 +27,7 @@ decoder =
 
 
 
--- CONVERT
+-- TRANSFORM
 
 
 toString : Slug -> String

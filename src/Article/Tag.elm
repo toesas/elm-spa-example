@@ -14,7 +14,7 @@ type Tag
 
 
 
--- CONVERT
+-- TRANSFORM
 
 
 toString : Tag -> String

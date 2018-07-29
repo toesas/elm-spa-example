@@ -24,7 +24,7 @@ decoder =
 
 
 
--- CONVERT
+-- TRANSFORM
 
 
 encode : Username -> Value
