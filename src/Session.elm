@@ -27,8 +27,8 @@ type alias Internals =
 
 type alias LoggedInUser =
     { authToken : AuthToken
-    , email : Email
     , profile : Profile
+    , email : Email
     }
 
 
@@ -155,5 +155,5 @@ loggedInUserDecoder : Decoder LoggedInUser
 loggedInUserDecoder =
     Decode.succeed LoggedInUser
         |> custom AuthToken.decoder
-        |> required "email" Email.decoder
         |> custom Profile.decoder
+        |> required "email" Email.decoder
