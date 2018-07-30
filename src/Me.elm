@@ -1,33 +1,25 @@
-module Me exposing (Me, avatar, bio, decoder, decoderWithToken, email, username)
+module Me exposing (Me, authToken, decoder, username, withAuthorization)
 
 import Api
 import AuthToken exposing (AuthToken, withAuthorization)
 import Avatar exposing (Avatar)
+import Email exposing (Email)
 import Http
 import HttpBuilder exposing (RequestBuilder, withExpect)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (custom, required)
 import Json.Encode as Encode exposing (Value)
+import Profile exposing (Profile)
 import Username exposing (Username)
 
 
 {-| The currently signed-in user.
 
-This is used for things like login, logout, and settings.
-
-Contrast with Profile, which is a user whose profile you're viewing.
+This is used for things like Session, Login, Logout, and Settings.
 
 -}
 type Me
-    = Me Internals
-
-
-type alias Internals =
-    { username : Username
-    , bio : Maybe String
-    , avatar : Avatar
-    , email : String
-    }
+    = Me Username AuthToken
 
 
 
@@ -35,23 +27,18 @@ type alias Internals =
 
 
 username : Me -> Username
-username (Me info) =
-    info.username
+username (Me val _) =
+    val
 
 
-bio : Me -> Maybe String
-bio (Me info) =
-    info.bio
+authToken : Me -> AuthToken
+authToken (Me _ val) =
+    val
 
 
-avatar : Me -> Avatar
-avatar (Me info) =
-    info.avatar
-
-
-email : Me -> String
-email (Me info) =
-    info.email
+withAuthorization : Maybe Me -> RequestBuilder a -> RequestBuilder a
+withAuthorization maybeMe builder =
+    AuthToken.withAuthorization (Maybe.map authToken maybeMe) builder
 
 
 
@@ -60,16 +47,6 @@ email (Me info) =
 
 decoder : Decoder Me
 decoder =
-    Decode.succeed Internals
+    Decode.succeed Me
         |> required "username" Username.decoder
-        |> required "bio" (Decode.nullable Decode.string)
-        |> required "image" Avatar.decoder
-        |> required "email" Decode.string
-        |> Decode.map Me
-
-
-decoderWithToken : Decoder ( Me, AuthToken )
-decoderWithToken =
-    Decode.succeed Tuple.pair
-        |> custom decoder
         |> required "token" AuthToken.decoder

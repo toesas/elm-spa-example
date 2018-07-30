@@ -12,7 +12,7 @@ import Json.Decode.Pipeline exposing (optional)
 import Json.Encode as Encode
 import Me exposing (Me)
 import Route exposing (Route)
-import Session exposing (Session)
+import Session exposing (LoggedInUser, Session)
 import Validate exposing (Valid, Validator, fromValid, ifBlank, validate)
 import Views.Form as Form
 
@@ -109,12 +109,12 @@ type Msg
     | EnteredEmail String
     | EnteredUsername String
     | EnteredPassword String
-    | CompletedRegister (Result Http.Error ( Me, AuthToken ))
+    | CompletedRegister (Result Http.Error LoggedInUser)
 
 
 type ExternalMsg
     = NoOp
-    | ChangedMeAndToken ( Me, AuthToken )
+    | ChangedLoggedInUser LoggedInUser
 
 
 update : Nav.Key -> Msg -> Model -> ( ( Model, Cmd Msg ), ExternalMsg )
@@ -156,9 +156,9 @@ update navKey msg model =
             , NoOp
             )
 
-        CompletedRegister (Ok pair) ->
+        CompletedRegister (Ok loggedInUser) ->
             ( ( model, Route.replaceUrl navKey Route.Home )
-            , ChangedMeAndToken pair
+            , ChangedLoggedInUser loggedInUser
             )
 
 
@@ -229,7 +229,7 @@ optionalError fieldName =
 -- HTTP
 
 
-register : Valid Form -> Http.Request ( Me, AuthToken )
+register : Valid Form -> Http.Request LoggedInUser
 register validForm =
     let
         form =
@@ -246,5 +246,5 @@ register validForm =
             Encode.object [ ( "user", user ) ]
                 |> Http.jsonBody
     in
-    Decode.field "user" Me.decoderWithToken
+    Decode.field "user" Session.loggedInUserDecoder
         |> Http.post (Api.url [ "users" ]) body

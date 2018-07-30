@@ -1,4 +1,4 @@
-module Views.Follow exposing (button)
+module Views.Follow exposing (followButton, unfollowButton)
 
 {-| The Follow button.
 
@@ -11,29 +11,40 @@ and for no benefit.
 
 -}
 
+import Author exposing (FollowedAuthor, UnfollowedAuthor)
 import Html exposing (Html, i, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
-import Profile
+import Profile exposing (Profile)
 import Username exposing (Username)
 
 
-button : (Username -> msg) -> Bool -> Username -> Html msg
-button toggleFollow following username =
+followButton : (UnfollowedAuthor -> msg) -> UnfollowedAuthor -> Html msg
+followButton toMsg author =
+    toggleFollowButton "Follow"
+        [ "btn-outline-secondary" ]
+        (toMsg author)
+        (Author.unfollowedUsername author)
+
+
+unfollowButton : (FollowedAuthor -> msg) -> FollowedAuthor -> Html msg
+unfollowButton toMsg author =
+    toggleFollowButton "Unfollow"
+        [ "btn-secondary" ]
+        (toMsg author)
+        (Author.followedUsername author)
+
+
+toggleFollowButton : String -> List String -> msg -> Username -> Html msg
+toggleFollowButton txt extraClasses msgWhenClicked username =
     let
-        ( prefix, secondaryClass ) =
-            if following then
-                ( "Unfollow", "btn-secondary" )
+        classStr =
+            "btn btn-sm " ++ String.join " " extraClasses ++ " action-btn"
 
-            else
-                ( "Follow", "btn-outline-secondary" )
-
-        classes =
-            [ "btn", "btn-sm", secondaryClass, "action-btn" ]
-                |> String.join " "
-                |> class
+        caption =
+            " " ++ txt ++ " " ++ Username.toString username
     in
-    Html.button [ classes, onClick (toggleFollow username) ]
+    Html.button [ class classStr, onClick msgWhenClicked ]
         [ i [ class "ion-plus-round" ] []
-        , text (" " ++ prefix ++ " " ++ Username.toString username)
+        , text caption
         ]

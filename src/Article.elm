@@ -6,9 +6,9 @@ module Article
         , author
         , body
         , fetch
-        , followAuthor
         , fromPreview
         , fullDecoder
+        , mapAuthor
         , metadata
         , previewDecoder
         , slug
@@ -32,6 +32,7 @@ import Article.Body as Body exposing (Body)
 import Article.Slug as Slug exposing (Slug)
 import Article.Tag as Tag exposing (Tag)
 import AuthToken exposing (AuthToken, withAuthorization)
+import Author exposing (Author)
 import Html exposing (Attribute, Html)
 import Http
 import HttpBuilder exposing (RequestBuilder, withBody, withExpect, withQueryParams)
@@ -39,6 +40,7 @@ import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (custom, hardcoded, required)
 import Json.Encode as Encode
 import Markdown
+import Me exposing (Me)
 import Profile exposing (Profile)
 import Time
 import Username as Username exposing (Username)
@@ -119,7 +121,7 @@ type alias Metadata =
 
 type alias Internals =
     { slug : Slug
-    , author : Profile
+    , author : Author
     , metadata : Metadata
     }
 
@@ -136,7 +138,7 @@ type Full
 -- INFO
 
 
-author : Article a -> Profile
+author : Article a -> Author
 author (Article internals _) =
     internals.author
 
@@ -161,15 +163,16 @@ body (Article _ (Full extraInfo)) =
 
 
 {-| This is the only way you can transform an existing article:
-you can follow its author. All other article data necessarily comes from the server!
+you can change its author (e.g. to follow or unfollow them).
+All other article data necessarily comes from the server!
 
 We can tell this for sure by looking at the types of the exposed functions
 in this module.
 
 -}
-followAuthor : Bool -> Article a -> Article a
-followAuthor isFollowing (Article info extras) =
-    Article { info | author = Profile.follow isFollowing info.author } extras
+mapAuthor : (Author -> Author) -> Article a -> Article a
+mapAuthor transform (Article info extras) =
+    Article { info | author = transform info.author } extras
 
 
 fromPreview : Body -> Article Preview -> Article Full
@@ -181,25 +184,25 @@ fromPreview newBody (Article info Preview) =
 -- SERIALIZATION
 
 
-previewDecoder : Decoder (Article Preview)
-previewDecoder =
+previewDecoder : Maybe Me -> Decoder (Article Preview)
+previewDecoder maybeMe =
     Decode.succeed Article
-        |> custom internalsDecoder
+        |> custom (internalsDecoder maybeMe)
         |> hardcoded Preview
 
 
-fullDecoder : Decoder (Article Full)
-fullDecoder =
+fullDecoder : Maybe Me -> Decoder (Article Full)
+fullDecoder maybeMe =
     Decode.succeed Article
-        |> custom internalsDecoder
+        |> custom (internalsDecoder maybeMe)
         |> required "body" (Decode.map Full Body.decoder)
 
 
-internalsDecoder : Decoder Internals
-internalsDecoder =
+internalsDecoder : Maybe Me -> Decoder Internals
+internalsDecoder maybeMe =
     Decode.succeed Internals
         |> required "slug" Slug.decoder
-        |> required "author" Profile.decoder
+        |> required "author" (Author.decoder maybeMe)
         |> custom metadataDecoder
 
 
@@ -218,18 +221,18 @@ metadataDecoder =
 -- SINGLE
 
 
-fetch : Maybe AuthToken -> Slug -> Http.Request (Article Full)
-fetch maybeToken articleSlug =
+fetch : Maybe Me -> Slug -> Http.Request (Article Full)
+fetch maybeMe articleSlug =
     let
         expect =
-            fullDecoder
+            fullDecoder maybeMe
                 |> Decode.field "article"
                 |> Http.expectJson
     in
     url articleSlug []
         |> HttpBuilder.get
         |> HttpBuilder.withExpect expect
-        |> withAuthorization maybeToken
+        |> withAuthorization (Maybe.map Me.authToken maybeMe)
         |> HttpBuilder.toRequest
 
 
@@ -237,39 +240,42 @@ fetch maybeToken articleSlug =
 -- FAVORITE
 
 
-toggleFavorite : Article a -> AuthToken -> Http.Request (Article Preview)
-toggleFavorite (Article info _) authToken =
+toggleFavorite : Article a -> Me -> Http.Request (Article Preview)
+toggleFavorite (Article info _) me =
     if info.metadata.favorited then
-        unfavorite info.slug authToken
+        unfavorite info.slug me
 
     else
-        favorite info.slug authToken
+        favorite info.slug me
 
 
-favorite : Slug -> AuthToken -> Http.Request (Article Preview)
-favorite =
-    buildFavorite HttpBuilder.post
+favorite : Slug -> Me -> Http.Request (Article Preview)
+favorite articleSlug me =
+    buildFavorite HttpBuilder.post articleSlug me
 
 
-unfavorite : Slug -> AuthToken -> Http.Request (Article Preview)
-unfavorite =
-    buildFavorite HttpBuilder.delete
+unfavorite : Slug -> Me -> Http.Request (Article Preview)
+unfavorite articleSlug me =
+    buildFavorite HttpBuilder.delete articleSlug me
 
 
 buildFavorite :
     (String -> RequestBuilder a)
     -> Slug
-    -> AuthToken
+    -> Me
     -> Http.Request (Article Preview)
-buildFavorite builderFromUrl articleSlug token =
+buildFavorite builderFromUrl articleSlug me =
     let
+        authToken =
+            Me.authToken me
+
         expect =
-            previewDecoder
+            previewDecoder (Just me)
                 |> Decode.field "article"
                 |> Http.expectJson
     in
     builderFromUrl (url articleSlug [ "favorite" ])
-        |> withAuthorization (Just token)
+        |> withAuthorization (Just authToken)
         |> withExpect expect
         |> HttpBuilder.toRequest
 

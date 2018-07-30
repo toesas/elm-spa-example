@@ -11,6 +11,7 @@ import Html exposing (..)
 import Html.Attributes exposing (attribute, class, classList, href, id, placeholder)
 import Html.Events exposing (onClick)
 import Http
+import Me exposing (Me)
 import Page.Errored exposing (PageLoadError, pageLoadError)
 import Session exposing (Session)
 import Task exposing (Task)
@@ -29,11 +30,11 @@ type alias Model =
     }
 
 
-init : Maybe AuthToken -> Task PageLoadError Model
-init maybeToken =
+init : Maybe Me -> Task PageLoadError Model
+init maybeMe =
     let
         feedSources =
-            case maybeToken of
+            case maybeMe of
                 Just _ ->
                     FeedSources.fromLists YourFeed [ GlobalFeed ]
 
@@ -45,7 +46,7 @@ init maybeToken =
                 |> Http.toTask
 
         loadSources =
-            Feed.init maybeToken feedSources
+            Feed.init maybeMe feedSources
 
         handleLoadError _ =
             pageLoadError Page.Home "Homepage is currently unavailable."
@@ -122,19 +123,19 @@ type Msg
     | GotFeedMsg Feed.Msg
 
 
-update : Maybe AuthToken -> Msg -> Model -> ( Model, Cmd Msg )
-update maybeToken msg model =
+update : Maybe Me -> Msg -> Model -> ( Model, Cmd Msg )
+update maybeMe msg model =
     case msg of
         GotFeedMsg subMsg ->
             let
                 ( newFeed, subCmd ) =
-                    Feed.update maybeToken subMsg model.feed
+                    Feed.update maybeMe subMsg model.feed
             in
             ( { model | feed = newFeed }, Cmd.map GotFeedMsg subCmd )
 
         ClickedTag tagName ->
             let
                 subCmd =
-                    Feed.selectTag maybeToken tagName
+                    Feed.selectTag maybeMe tagName
             in
             ( model, Cmd.map GotFeedMsg subCmd )

@@ -4,6 +4,7 @@ import Api
 import AuthToken exposing (AuthToken, withAuthorization)
 import Avatar
 import Browser.Navigation as Nav
+import Email exposing (Email)
 import Html exposing (Html, button, div, fieldset, h1, input, text, textarea)
 import Html.Attributes exposing (attribute, class, placeholder, type_, value)
 import Html.Events exposing (onInput, onSubmit)
@@ -13,8 +14,9 @@ import Json.Decode as Decode exposing (Decoder, decodeString, field, list, strin
 import Json.Decode.Pipeline exposing (optional)
 import Json.Encode as Encode
 import Me exposing (Me)
+import Profile exposing (Profile)
 import Route
-import Session exposing (Session)
+import Session exposing (LoggedInUser, Session)
 import Username as Username exposing (Username)
 import Validate exposing (Valid, Validator, fromValid, ifBlank, validate)
 import Views.Form as Form
@@ -39,13 +41,13 @@ type alias Form =
     }
 
 
-init : Me -> Model
-init me =
+init : Me -> Email -> Profile -> Model
+init me email profile =
     { errors = []
     , form =
-        { avatar = Avatar.toMaybeString (Me.avatar me)
-        , email = Me.email me
-        , bio = Maybe.withDefault "" (Me.bio me)
+        { avatar = Avatar.toMaybeString (Profile.avatar profile)
+        , email = Email.toString email
+        , bio = Maybe.withDefault "" (Profile.bio profile)
         , username = Username.toString (Me.username me)
         , password = Nothing
         }
@@ -143,12 +145,12 @@ type Msg
     | EnteredPassword String
     | EnteredBio String
     | EnteredImage String
-    | CompletedSave (Result Http.Error Me)
+    | CompletedSave (Result Http.Error LoggedInUser)
 
 
 type ExternalMsg
     = NoOp
-    | ChangedMe Me
+    | ChangedLoggedInUser LoggedInUser
 
 
 update : Nav.Key -> AuthToken -> Msg -> Model -> ( ( Model, Cmd Msg ), ExternalMsg )
@@ -157,9 +159,10 @@ update navKey authToken msg model =
         SubmittedForm ->
             case validate formValidator model.form of
                 Ok validForm ->
-                    ( edit authToken validForm
-                        |> Http.send CompletedSave
-                        |> Tuple.pair { model | errors = [] }
+                    ( ( { model | errors = [] }
+                      , edit authToken validForm
+                            |> Http.send CompletedSave
+                      )
                     , NoOp
                     )
 
@@ -214,11 +217,11 @@ update navKey authToken msg model =
             , NoOp
             )
 
-        CompletedSave (Ok me) ->
+        CompletedSave (Ok loggedInUser) ->
             ( ( model
               , Route.replaceUrl navKey Route.Home
               )
-            , ChangedMe me
+            , ChangedLoggedInUser loggedInUser
             )
 
 
@@ -279,7 +282,7 @@ optionalError fieldName =
 {-| This takes a Valid Form as a reminder that it needs to have been validated
 first.
 -}
-edit : AuthToken -> Valid Form -> Http.Request Me
+edit : AuthToken -> Valid Form -> Http.Request LoggedInUser
 edit authToken validForm =
     let
         form =
@@ -301,7 +304,7 @@ edit authToken validForm =
                 |> Http.jsonBody
 
         expect =
-            Decode.field "user" Me.decoder
+            Decode.field "user" Session.loggedInUserDecoder
                 |> Http.expectJson
     in
     Api.url [ "user" ]

@@ -17,6 +17,7 @@ import Http
 import HttpBuilder exposing (RequestBuilder, withExpect, withQueryParams)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (required)
+import Me exposing (Me)
 import Username exposing (Username)
 
 
@@ -53,8 +54,8 @@ defaultListConfig =
     }
 
 
-list : ListConfig -> Maybe AuthToken -> Http.Request Feed
-list config maybeToken =
+list : ListConfig -> Maybe Me -> Http.Request Feed
+list config maybeMe =
     [ Maybe.map (\tag -> ( "tag", Tag.toString tag )) config.tag
     , Maybe.map (\author -> ( "author", Username.toString author )) config.author
     , Maybe.map (\favorited -> ( "favorited", Username.toString favorited )) config.favorited
@@ -62,8 +63,8 @@ list config maybeToken =
     , Just ( "offset", String.fromInt config.offset )
     ]
         |> List.filterMap identity
-        |> buildFromQueryParams (Api.url [ "articles" ])
-        |> withAuthorization maybeToken
+        |> buildFromQueryParams maybeMe (Api.url [ "articles" ])
+        |> withAuthorization (Maybe.map Me.authToken maybeMe)
         |> HttpBuilder.toRequest
 
 
@@ -84,13 +85,13 @@ defaultFeedConfig =
     }
 
 
-feed : FeedConfig -> AuthToken -> Http.Request Feed
-feed config token =
+feed : FeedConfig -> Me -> Http.Request Feed
+feed config me =
     [ ( "limit", String.fromInt config.limit )
     , ( "offset", String.fromInt config.offset )
     ]
-        |> buildFromQueryParams (Api.url [ "articles", "feed" ])
-        |> withAuthorization (Just token)
+        |> buildFromQueryParams (Just me) (Api.url [ "articles", "feed" ])
+        |> withAuthorization (Just (Me.authToken me))
         |> HttpBuilder.toRequest
 
 
@@ -98,10 +99,10 @@ feed config token =
 -- SERIALIZATION
 
 
-decoder : Decoder Feed
-decoder =
+decoder : Maybe Me -> Decoder Feed
+decoder maybeMe =
     Decode.succeed Feed
-        |> required "articles" (Decode.list Article.previewDecoder)
+        |> required "articles" (Decode.list (Article.previewDecoder maybeMe))
         |> required "articlesCount" Decode.int
 
 
@@ -109,8 +110,8 @@ decoder =
 -- REQUEST
 
 
-buildFromQueryParams : String -> List ( String, String ) -> RequestBuilder Feed
-buildFromQueryParams url queryParams =
+buildFromQueryParams : Maybe Me -> String -> List ( String, String ) -> RequestBuilder Feed
+buildFromQueryParams maybeMe url queryParams =
     HttpBuilder.get url
-        |> withExpect (Http.expectJson decoder)
+        |> withExpect (Http.expectJson (decoder maybeMe))
         |> withQueryParams queryParams

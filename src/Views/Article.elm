@@ -4,6 +4,7 @@ module Views.Article exposing (view, viewTimestamp)
 -}
 
 import Article exposing (Article)
+import Author
 import Avatar exposing (Avatar)
 import Html exposing (..)
 import Html.Attributes exposing (attribute, class, classList, href, id, placeholder, src)
@@ -43,13 +44,16 @@ view toggleFavorite timeZone article =
         author =
             Article.author article
 
+        profile =
+            Author.profile author
+
         username =
-            Profile.username author
+            Author.username author
     in
     div [ class "article-preview" ]
         [ div [ class "article-meta" ]
             [ a [ Route.href (Route.Profile username) ]
-                [ img [ Avatar.src (Profile.avatar author) ] [] ]
+                [ img [ Avatar.src (Profile.avatar profile) ] [] ]
             , div [ class "info" ]
                 [ Views.Author.view username
                 , viewTimestamp timeZone article

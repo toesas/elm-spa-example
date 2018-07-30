@@ -8,6 +8,7 @@ import Article.Body
 import Article.Comment as Comment exposing (Comment)
 import Article.Slug as Slug exposing (Slug)
 import AuthToken exposing (AuthToken, withAuthorization)
+import Author exposing (Author(..), FollowedAuthor, UnfollowedAuthor)
 import Avatar
 import Browser.Navigation as Nav
 import CommentId exposing (CommentId)
@@ -20,7 +21,7 @@ import Me exposing (Me)
 import Page.Errored exposing (PageLoadError, pageLoadError)
 import Profile exposing (Profile)
 import Route
-import Session exposing (Session)
+import Session exposing (LoggedInUser, Session)
 import Task exposing (Task)
 import Time
 import Username exposing (Username)
@@ -46,15 +47,15 @@ type alias Model =
     }
 
 
-init : Maybe AuthToken -> Slug -> Task PageLoadError Model
-init maybeToken slug =
+init : Maybe Me -> Slug -> Task PageLoadError Model
+init maybeMe slug =
     let
         loadArticle =
-            Article.fetch maybeToken slug
+            Article.fetch maybeMe slug
                 |> Http.toTask
 
         loadComments =
-            Comment.list maybeToken slug
+            Comment.list maybeMe slug
                 |> Http.toTask
 
         handleLoadError _ =
@@ -71,8 +72,11 @@ init maybeToken slug =
 view : Session -> Model -> { title : String, content : Html Msg }
 view session model =
     let
+        loggedInUser =
+            Session.loggedInUser session
+
         maybeMe =
-            Session.me session
+            Maybe.map .me loggedInUser
 
         article =
             model.article
@@ -83,8 +87,11 @@ view session model =
         author =
             Article.author article
 
+        avatar =
+            Profile.avatar (Author.profile author)
+
         buttons =
-            viewButtons article author maybeMe
+            viewButtons article author
 
         timeZone =
             Session.timeZone session
@@ -95,7 +102,7 @@ view session model =
     { title = title
     , content =
         div [ class "article-page" ]
-            [ viewBanner timeZone model.errors article author maybeMe
+            [ viewBanner timeZone model.errors article author
             , div [ class "container page" ]
                 [ div [ class "row article-content" ]
                     [ div [ class "col-md-12" ]
@@ -104,10 +111,10 @@ view session model =
                 , hr [] []
                 , div [ class "article-actions" ]
                     [ div [ class "article-meta" ] <|
-                        [ a [ Route.href (Route.Profile (Profile.username author)) ]
-                            [ img [ Avatar.src (Profile.avatar author) ] [] ]
+                        [ a [ Route.href (Route.Profile (Author.username author)) ]
+                            [ img [ Avatar.src avatar ] [] ]
                         , div [ class "info" ]
-                            [ Views.Author.view (Profile.username author)
+                            [ Views.Author.view (Author.username author)
                             , Views.Article.viewTimestamp timeZone article
                             ]
                         ]
@@ -115,7 +122,7 @@ view session model =
                     ]
                 , div [ class "row" ]
                     [ div [ class "col-xs-12 col-md-8 offset-md-2" ] <|
-                        viewAddComment postingDisabled maybeMe
+                        viewAddComment postingDisabled loggedInUser
                             :: List.map (viewComment timeZone maybeMe) model.comments
                     ]
                 ]
@@ -123,23 +130,26 @@ view session model =
     }
 
 
-viewBanner : Time.Zone -> List String -> Article a -> Profile -> Maybe Me -> Html Msg
-viewBanner timeZone errors article author maybeMe =
+viewBanner : Time.Zone -> List String -> Article a -> Author -> Html Msg
+viewBanner timeZone errors article author =
     let
         { title } =
             Article.metadata article
 
         buttons =
-            viewButtons article author maybeMe
+            viewButtons article author
+
+        profile =
+            Author.profile author
     in
     div [ class "banner" ]
         [ div [ class "container" ]
             [ h1 [] [ text title ]
             , div [ class "article-meta" ] <|
-                [ a [ Route.href (Route.Profile (Profile.username author)) ]
-                    [ img [ Avatar.src (Profile.avatar author) ] [] ]
+                [ a [ Route.href (Route.Profile (Author.username author)) ]
+                    [ img [ Avatar.src (Profile.avatar profile) ] [] ]
                 , div [ class "info" ]
-                    [ Views.Author.view (Profile.username author)
+                    [ Views.Author.view (Author.username author)
                     , Views.Article.viewTimestamp timeZone article
                     ]
                 ]
@@ -149,9 +159,9 @@ viewBanner timeZone errors article author maybeMe =
         ]
 
 
-viewAddComment : Bool -> Maybe Me -> Html Msg
-viewAddComment postingDisabled maybeMe =
-    case maybeMe of
+viewAddComment : Bool -> Maybe LoggedInUser -> Html Msg
+viewAddComment postingDisabled loggedInUser =
+    case loggedInUser of
         Nothing ->
             p []
                 [ a [ Route.href Route.Login ] [ text "Sign in" ]
@@ -160,7 +170,7 @@ viewAddComment postingDisabled maybeMe =
                 , text " to add comments on this article."
                 ]
 
-        Just me ->
+        Just { me, profile } ->
             Html.form [ class "card comment-form", onSubmit ClickedPostComment ]
                 [ div [ class "card-block" ]
                     [ textarea
@@ -172,7 +182,7 @@ viewAddComment postingDisabled maybeMe =
                         []
                     ]
                 , div [ class "card-footer" ]
-                    [ img [ class "comment-author-img", Avatar.src (Me.avatar me) ] []
+                    [ img [ class "comment-author-img", Avatar.src (Profile.avatar profile) ] []
                     , button
                         [ class "btn btn-sm btn-primary"
                         , disabled postingDisabled
@@ -182,23 +192,30 @@ viewAddComment postingDisabled maybeMe =
                 ]
 
 
-viewButtons : Article a -> Profile -> Maybe Me -> List (Html Msg)
-viewButtons article author maybeMe =
-    let
-        isMine =
-            Maybe.map Me.username maybeMe == Just (Profile.username author)
-    in
-    if isMine then
-        [ editButton article
-        , text " "
-        , deleteButton article
-        ]
+viewButtons : Article a -> Author -> List (Html Msg)
+viewButtons article author =
+    case author of
+        IsFollowing followedAuthor ->
+            Follow.unfollowButton ClickedUnfollow followedAuthor
+                |> withFavoriteButton article
 
-    else
-        [ followButton author
-        , text " "
-        , favoriteButton article
-        ]
+        IsNotFollowing unfollowedAuthor ->
+            Follow.followButton ClickedFollow unfollowedAuthor
+                |> withFavoriteButton article
+
+        IsMe _ _ ->
+            [ editButton article
+            , text " "
+            , deleteButton article
+            ]
+
+
+withFavoriteButton : Article a -> Html Msg -> List (Html Msg)
+withFavoriteButton article html =
+    [ html
+    , text " "
+    , favoriteButton article
+    ]
 
 
 viewComment : Time.Zone -> Maybe Me -> Comment -> Html Msg
@@ -207,11 +224,19 @@ viewComment timeZone maybeMe comment =
         author =
             Comment.author comment
 
+        profile =
+            Author.profile author
+
         authorUsername =
-            Profile.username author
+            Author.username author
 
         isMine =
-            Maybe.map Me.username maybeMe == Just authorUsername
+            case maybeMe of
+                Just me ->
+                    Me.username me == authorUsername
+
+                Nothing ->
+                    False
 
         timestamp =
             Util.formatTimestamp timeZone (Comment.createdAt comment)
@@ -221,7 +246,7 @@ viewComment timeZone maybeMe comment =
             [ p [ class "card-text" ] [ text (Comment.body comment) ] ]
         , div [ class "card-footer" ]
             [ a [ class "comment-author", href "" ]
-                [ img [ class "comment-author-img", Avatar.src (Profile.avatar author) ] []
+                [ img [ class "comment-author-img", Avatar.src (Profile.avatar profile) ] []
                 , text " "
                 ]
             , text " "
@@ -250,13 +275,14 @@ type Msg
     | ClickedDeleteComment CommentId
     | ClickedDismissErrors
     | ClickedFavorite
-    | ClickedFollow
+    | ClickedFollow UnfollowedAuthor
+    | ClickedUnfollow FollowedAuthor
     | ClickedPostComment
     | EnteredCommentText String
     | CompletedDeleteArticle (Result Http.Error ())
     | CompletedDeleteComment CommentId (Result Http.Error ())
-    | CompletedFavorite (Result Http.Error (Article Full))
-    | CompletedFollow (Result Http.Error Profile)
+    | CompletedFavoriteChange (Result Http.Error (Article Full))
+    | CompletedFollowChange (Result Http.Error Author)
     | CompletedPostComment (Result Http.Error Comment)
 
 
@@ -277,44 +303,54 @@ update navKey session msg model =
             ( { model | errors = [] }, Cmd.none )
 
         ClickedFavorite ->
-            let
-                cmdFromAuth authToken =
-                    Article.toggleFavorite article authToken
+            case Session.me session of
+                Nothing ->
+                    ( { model | errors = model.errors ++ [ "Please sign in to favorite this article." ] }
+                    , Cmd.none
+                    )
+
+                Just me ->
+                    ( model
+                    , Article.toggleFavorite article me
                         |> Http.toTask
                         |> Task.map (Article.fromPreview oldBody)
-                        |> Task.attempt CompletedFavorite
-            in
-            session
-                |> Session.attempt "favorite" cmdFromAuth
-                |> Util.updateFromResult model Cmd.none
+                        |> Task.attempt CompletedFavoriteChange
+                    )
 
-        CompletedFavorite (Ok newArticle) ->
+        CompletedFavoriteChange (Ok newArticle) ->
             ( { model | article = newArticle }, Cmd.none )
 
-        CompletedFavorite (Err error) ->
+        CompletedFavoriteChange (Err error) ->
             -- In a serious production application, we would log the error to
             -- a logging service so we could investigate later.
             ( { model | errors = model.errors ++ [ "There was a server error trying to record your Favorite. Sorry!" ] }
             , Cmd.none
             )
 
-        ClickedFollow ->
+        ClickedUnfollow followedAuthor ->
             let
                 cmdFromAuth authToken =
-                    authToken
-                        |> Profile.toggleFollow
-                            (Profile.username author)
-                            (Profile.following author)
-                        |> Http.send CompletedFollow
+                    Author.requestUnfollow followedAuthor authToken
+                        |> Http.send CompletedFollowChange
+            in
+            session
+                |> Session.attempt "unfollow" cmdFromAuth
+                |> Util.updateFromResult model Cmd.none
+
+        ClickedFollow unfollowedAuthor ->
+            let
+                cmdFromAuth authToken =
+                    Author.requestFollow unfollowedAuthor authToken
+                        |> Http.send CompletedFollowChange
             in
             session
                 |> Session.attempt "follow" cmdFromAuth
                 |> Util.updateFromResult model Cmd.none
 
-        CompletedFollow (Ok newAuthor) ->
-            ( { model | article = Article.followAuthor (Profile.following newAuthor) article }, Cmd.none )
+        CompletedFollowChange (Ok newAuthor) ->
+            ( { model | article = Article.mapAuthor (\_ -> newAuthor) article }, Cmd.none )
 
-        CompletedFollow (Err error) ->
+        CompletedFollowChange (Err error) ->
             ( { model | errors = "Unable to follow user." :: model.errors }, Cmd.none )
 
         EnteredCommentText commentText ->
@@ -329,15 +365,18 @@ update navKey session msg model =
                 ( model, Cmd.none )
 
             else
-                let
-                    cmdFromAuth authToken =
-                        authToken
+                case Session.me session of
+                    Nothing ->
+                        ( { model | errors = model.errors ++ [ "Please sign in to post a comment." ] }
+                        , Cmd.none
+                        )
+
+                    Just me ->
+                        ( { model | commentInFlight = True }
+                        , me
                             |> Comment.post (Article.slug model.article) comment
                             |> Http.send CompletedPostComment
-                in
-                session
-                    |> Session.attempt "post a comment" cmdFromAuth
-                    |> Util.updateFromResult { model | commentInFlight = True } Cmd.none
+                        )
 
         CompletedPostComment (Ok comment) ->
             ( { model
@@ -436,10 +475,3 @@ editButton : Article a -> Html Msg
 editButton article =
     a [ class "btn btn-outline-secondary btn-sm", Route.href (Route.EditArticle (Article.slug article)) ]
         [ i [ class "ion-edit" ] [], text " Edit Article" ]
-
-
-followButton : Profile -> Html Msg
-followButton author =
-    Follow.button (\_ -> ClickedFollow)
-        (Profile.following author)
-        (Profile.username author)

@@ -27,6 +27,7 @@ import Html exposing (..)
 import Html.Attributes exposing (attribute, class, classList, href, id, placeholder, src)
 import Html.Events exposing (onClick)
 import Http
+import Me exposing (Me)
 import Profile
 import Session exposing (Session)
 import Task exposing (Task)
@@ -59,8 +60,8 @@ type alias InternalModel =
     }
 
 
-init : Maybe AuthToken -> FeedSources -> Task Http.Error Model
-init maybeToken feedSources =
+init : Maybe Me -> FeedSources -> Task Http.Error Model
+init maybeMe feedSources =
     let
         source =
             FeedSources.selected feedSources
@@ -75,7 +76,7 @@ init maybeToken feedSources =
                 }
     in
     source
-        |> fetch maybeToken 1
+        |> fetch maybeMe 1
         |> Task.map toModel
 
 
@@ -125,14 +126,14 @@ viewFeedSource isSelected source =
         ]
 
 
-selectTag : Maybe AuthToken -> Tag -> Cmd Msg
-selectTag maybeAuthToken tagName =
+selectTag : Maybe Me -> Tag -> Cmd Msg
+selectTag maybeMe tagName =
     let
         source =
             TagFeed tagName
     in
     source
-        |> fetch maybeAuthToken 1
+        |> fetch maybeMe 1
         |> Task.attempt (CompletedFeedLoad source)
 
 
@@ -219,21 +220,21 @@ type Msg
     | CompletedFeedLoad Source (Result Http.Error ( Int, Feed ))
 
 
-update : Maybe AuthToken -> Msg -> Model -> ( Model, Cmd Msg )
-update maybeToken msg (Model internalModel) =
-    updateInternal maybeToken msg internalModel
+update : Maybe Me -> Msg -> Model -> ( Model, Cmd Msg )
+update maybeMe msg (Model internalModel) =
+    updateInternal maybeMe msg internalModel
         |> Tuple.mapFirst Model
 
 
-updateInternal : Maybe AuthToken -> Msg -> InternalModel -> ( InternalModel, Cmd Msg )
-updateInternal maybeToken msg model =
+updateInternal : Maybe Me -> Msg -> InternalModel -> ( InternalModel, Cmd Msg )
+updateInternal maybeMe msg model =
     case msg of
         ClickedDismissErrors ->
             ( { model | errors = [] }, Cmd.none )
 
         ClickedFeedSource source ->
             source
-                |> fetch maybeToken 1
+                |> fetch maybeMe 1
                 |> Task.attempt (CompletedFeedLoad source)
                 |> Tuple.pair { model | isLoading = True }
 
@@ -256,14 +257,14 @@ updateInternal maybeToken msg model =
             )
 
         ClickedFavorite article ->
-            case maybeToken of
+            case maybeMe of
                 Nothing ->
                     ( { model | errors = model.errors ++ [ "You are currently signed out. You must sign in to favorite articles." ] }
                     , Cmd.none
                     )
 
-                Just token ->
-                    Article.toggleFavorite article token
+                Just me ->
+                    Article.toggleFavorite article me
                         |> Http.send CompletedFavorite
                         |> Tuple.pair model
 
@@ -288,7 +289,7 @@ updateInternal maybeToken msg model =
                     FeedSources.selected model.feedSources
             in
             source
-                |> fetch maybeToken page
+                |> fetch maybeMe page
                 |> Task.andThen (\feed -> Task.map (\_ -> feed) scrollToTop)
                 |> Task.attempt (CompletedFeedLoad source)
                 |> Tuple.pair model
@@ -302,8 +303,8 @@ scrollToTop =
         |> Task.onError (\_ -> Task.succeed ())
 
 
-fetch : Maybe AuthToken -> Int -> Source -> Task Http.Error ( Int, Feed )
-fetch authToken page feedSource =
+fetch : Maybe Me -> Int -> Source -> Task Http.Error ( Int, Feed )
+fetch maybeMe page feedSource =
     let
         defaultListConfig =
             Feed.defaultListConfig
@@ -320,8 +321,8 @@ fetch authToken page feedSource =
         task =
             case feedSource of
                 YourFeed ->
-                    case authToken of
-                        Just token ->
+                    case maybeMe of
+                        Just me ->
                             let
                                 defaultFeedConfig =
                                     Feed.defaultFeedConfig
@@ -329,7 +330,7 @@ fetch authToken page feedSource =
                                 feedConfig =
                                     { defaultFeedConfig | offset = offset, limit = articlesPerPage }
                             in
-                            Feed.feed feedConfig token
+                            Feed.feed feedConfig me
                                 |> Http.toTask
 
                         Nothing ->
@@ -337,19 +338,19 @@ fetch authToken page feedSource =
                                 |> Task.fail
 
                 GlobalFeed ->
-                    Feed.list listConfig authToken
+                    Feed.list listConfig maybeMe
                         |> Http.toTask
 
                 TagFeed tagName ->
-                    Feed.list { listConfig | tag = Just tagName } authToken
+                    Feed.list { listConfig | tag = Just tagName } maybeMe
                         |> Http.toTask
 
                 FavoritedFeed username ->
-                    Feed.list { listConfig | favorited = Just username } authToken
+                    Feed.list { listConfig | favorited = Just username } maybeMe
                         |> Http.toTask
 
                 AuthorFeed username ->
-                    Feed.list { listConfig | author = Just username } authToken
+                    Feed.list { listConfig | author = Just username } maybeMe
                         |> Http.toTask
     in
     task

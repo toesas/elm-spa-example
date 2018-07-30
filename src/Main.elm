@@ -74,22 +74,7 @@ init flags url navKey =
 
 fromFlags : Value -> Session
 fromFlags flags =
-    Session.init Time.utc (decodeFlags flags)
-
-
-decodeFlags : Value -> Maybe ( Me, AuthToken )
-decodeFlags json =
-    case Decode.decodeValue Decode.string json of
-        Ok str ->
-            case Decode.decodeString Me.decoderWithToken str of
-                Ok tuple ->
-                    Just tuple
-
-                Err _ ->
-                    Nothing
-
-        Err _ ->
-            Nothing
+    Session.fromValue Time.utc flags
 
 
 initialPage : CurrentPage
@@ -122,7 +107,7 @@ viewCurrentPage : Session -> Bool -> CurrentPage -> Document Msg
 viewCurrentPage session isLoading page =
     let
         frame =
-            Page.frame isLoading (Session.me session)
+            Page.frame isLoading (Session.loggedInUser session)
     in
     case page of
         NotFound ->
@@ -286,21 +271,21 @@ setRoute maybeRoute model =
         Just (Route.EditArticle slug) ->
             if Session.isLoggedIn model.session then
                 transition (LoadedEditArticle slug)
-                    (Editor.initEdit (Session.token model.session) slug)
+                    (Editor.initEdit (Session.me model.session) slug)
 
             else
                 errored Page.Other "You must be signed in to edit an article."
 
         Just Route.Settings ->
-            case Session.me model.session of
-                Just me ->
-                    ( { model | pageState = Loaded (Settings (Settings.init me)) }, Cmd.none )
+            case Session.loggedInUser model.session of
+                Just loggedInUser ->
+                    ( { model | pageState = Loaded (Settings (Settings.init loggedInUser.me loggedInUser.email loggedInUser.profile)) }, Cmd.none )
 
                 Nothing ->
                     errored Page.Settings "You must be signed in to access your settings."
 
         Just Route.Home ->
-            transition LoadedHome (Home.init (Session.token model.session))
+            transition LoadedHome (Home.init (Session.me model.session))
 
         Just Route.Root ->
             ( model, Route.replaceUrl model.navKey Route.Home )
@@ -320,10 +305,10 @@ setRoute maybeRoute model =
             ( { model | pageState = Loaded (Register Register.initialModel) }, Cmd.none )
 
         Just (Route.Profile username) ->
-            transition (LoadedProfile username) (Profile.init (Session.token model.session) username)
+            transition (LoadedProfile username) (Profile.init (Session.me model.session) username)
 
         Just (Route.Article slug) ->
-            transition LoadedArticle (Article.init (Session.token model.session) slug)
+            transition LoadedArticle (Article.init (Session.me model.session) slug)
 
 
 pageErrored : Model -> ActivePage -> String -> ( Model, Cmd msg )
@@ -412,7 +397,7 @@ updateCurrentPage page msg model =
             ( { model | pageState = Loaded (Errored error) }, Cmd.none )
 
         ( GotSettingsMsg subMsg, Settings subModel ) ->
-            case Session.token model.session of
+            case Session.authToken model.session of
                 Just authToken ->
                     let
                         ( ( pageModel, cmd ), msgFromPage ) =
@@ -428,15 +413,15 @@ updateCurrentPage page msg model =
                         Settings.NoOp ->
                             ( { model | pageState = pageState }, pageCmd )
 
-                        Settings.ChangedMe me ->
+                        Settings.ChangedLoggedInUser loggedInUser ->
                             ( { model
                                 | pageState = pageState
                                 , session =
                                     Session.init
                                         (Session.timeZone model.session)
-                                        (Just ( me, authToken ))
+                                        (Just loggedInUser)
                               }
-                            , Cmd.batch [ pageCmd, Session.store ( me, authToken ) ]
+                            , Cmd.batch [ pageCmd, Session.store loggedInUser ]
                             )
 
                 Nothing ->
@@ -457,15 +442,15 @@ updateCurrentPage page msg model =
                 Login.NoOp ->
                     ( { model | pageState = pageState }, pageCmd )
 
-                Login.ChangedMeAndToken pair ->
+                Login.ChangedLoggedInUser loggedInUser ->
                     ( { model
                         | pageState = pageState
                         , session =
                             Session.init
                                 (Session.timeZone model.session)
-                                (Just pair)
+                                (Just loggedInUser)
                       }
-                    , Cmd.batch [ pageCmd, Session.store pair ]
+                    , Cmd.batch [ pageCmd, Session.store loggedInUser ]
                     )
 
         ( GotRegisterMsg subMsg, Register subModel ) ->
@@ -483,7 +468,7 @@ updateCurrentPage page msg model =
                 Register.NoOp ->
                     ( { model | pageState = pageState }, pageCmd )
 
-                Register.ChangedMeAndToken pair ->
+                Register.ChangedLoggedInUser pair ->
                     ( { model
                         | pageState = pageState
                         , session =
@@ -495,27 +480,22 @@ updateCurrentPage page msg model =
                     )
 
         ( GotHomeMsg subMsg, Home subModel ) ->
-            toPage Home GotHomeMsg (Home.update (Session.token session)) subMsg subModel
+            toPage Home GotHomeMsg (Home.update (Session.me session)) subMsg subModel
 
         ( GotProfileMsg subMsg, Profile username subModel ) ->
-            toPage (Profile username) GotProfileMsg (Profile.update (Session.token model.session)) subMsg subModel
+            toPage (Profile username) GotProfileMsg (Profile.update model.session) subMsg subModel
 
         ( GotArticleMsg subMsg, Article subModel ) ->
             toPage Article GotArticleMsg (Article.update model.navKey model.session) subMsg subModel
 
         ( GotEditorMsg subMsg, Editor slug subModel ) ->
-            case Session.token model.session of
+            case Session.me model.session of
                 Nothing ->
-                    if slug == Nothing then
-                        errored Page.NewArticle
-                            "You must be signed in to post articles."
+                    errored Page.Other
+                        "You must be signed in to post or edit articles."
 
-                    else
-                        errored Page.Other
-                            "You must be signed in to edit articles."
-
-                Just token ->
-                    toPage (Editor slug) GotEditorMsg (Editor.update token model.navKey) subMsg subModel
+                Just me ->
+                    toPage (Editor slug) GotEditorMsg (Editor.update me model.navKey) subMsg subModel
 
         ( _, NotFound ) ->
             -- Disregard incoming messages when we're on the

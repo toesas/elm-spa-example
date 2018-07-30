@@ -6,6 +6,7 @@ module Page.Profile exposing (Model, Msg, init, update, view)
 import Article.Feed as Feed exposing (ListConfig, defaultListConfig)
 import Article.FeedSources as FeedSources exposing (FeedSources, Source(..))
 import AuthToken exposing (AuthToken)
+import Author exposing (Author(..), FollowedAuthor, UnfollowedAuthor)
 import Avatar exposing (Avatar)
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -17,6 +18,7 @@ import Session exposing (Session)
 import Task exposing (Task)
 import Time
 import Username exposing (Username)
+import Util
 import Views.Article.Feed as Feed
 import Views.Errors as Errors
 import Views.Follow as Follow
@@ -29,30 +31,31 @@ import Views.Page as Page
 
 type alias Model =
     { errors : List String
-    , profile : Profile
+    , username : Username
+    , author : Author
     , feed : Feed.Model
     }
 
 
-init : Maybe AuthToken -> Username -> Task PageLoadError Model
-init maybeToken username =
+init : Maybe Me -> Username -> Task PageLoadError Model
+init maybeMe username =
     let
         config : ListConfig
         config =
             { defaultListConfig | limit = 5, author = Just username }
 
         loadProfile =
-            Profile.fetch username maybeToken
+            Author.fetch username maybeMe
                 |> Http.toTask
 
         loadFeedSources =
-            Feed.init maybeToken (defaultFeedSources username)
+            Feed.init maybeMe (defaultFeedSources username)
 
         handleLoadError _ =
             "Profile is currently unavailable."
                 |> pageLoadError (Page.Profile username)
     in
-    Task.map2 (Model []) loadProfile loadFeedSources
+    Task.map2 (Model [] username) loadProfile loadFeedSources
         |> Task.mapError handleLoadError
 
 
@@ -64,27 +67,29 @@ view : Session -> Model -> { title : String, content : Html Msg }
 view session model =
     let
         profile =
-            model.profile
+            Author.profile model.author
 
-        isMyProfile =
-            case Session.me session of
-                Just me ->
-                    Me.username me == Profile.username profile
+        username =
+            Author.username model.author
 
-                Nothing ->
-                    False
+        ( title, followButton ) =
+            case model.author of
+                IsMe _ _ ->
+                    ( "My Profile"
+                    , text ""
+                    )
+
+                IsFollowing followedAuthor ->
+                    ( titleForOther (Author.followedUsername followedAuthor)
+                    , Follow.unfollowButton ClickedUnfollow followedAuthor
+                    )
+
+                IsNotFollowing unfollowedAuthor ->
+                    ( titleForOther (Author.unfollowedUsername unfollowedAuthor)
+                    , Follow.followButton ClickedFollow unfollowedAuthor
+                    )
     in
-    { title =
-        if isMyProfile then
-            "My Profile"
-
-        else
-            case Session.me session of
-                Just me ->
-                    "Profile — " ++ Username.toString (Me.username me)
-
-                Nothing ->
-                    "Profile"
+    { title = title
     , content =
         div [ class "profile-page" ]
             [ Errors.view ClickedDismissErrors model.errors
@@ -93,13 +98,9 @@ view session model =
                     [ div [ class "row" ]
                         [ div [ class "col-xs-12 col-md-10 offset-md-1" ]
                             [ img [ class "user-img", Avatar.src (Profile.avatar profile) ] []
-                            , h4 [] [ Username.toHtml (Profile.username profile) ]
+                            , h4 [] [ Username.toHtml username ]
                             , p [] [ text (Maybe.withDefault "" (Profile.bio profile)) ]
-                            , if isMyProfile then
-                                text ""
-
-                              else
-                                followButton profile
+                            , followButton
                             ]
                         ]
                     ]
@@ -108,6 +109,11 @@ view session model =
                 [ div [ class "row" ] [ viewFeed (Session.timeZone session) model.feed ] ]
             ]
     }
+
+
+titleForOther : Username -> String
+titleForOther otherUsername =
+    "Profile — " ++ Username.toString otherUsername
 
 
 viewFeed : Time.Zone -> Feed.Model -> Html Msg
@@ -124,55 +130,54 @@ viewFeed timeZone feed =
 
 type Msg
     = ClickedDismissErrors
-    | ClickedFollow
-    | CompletedFollow (Result Http.Error Profile)
+    | ClickedFollow UnfollowedAuthor
+    | ClickedUnfollow FollowedAuthor
+    | CompletedFollowChange (Result Http.Error Author)
     | GotFeedMsg Feed.Msg
 
 
-update : Maybe AuthToken -> Msg -> Model -> ( Model, Cmd Msg )
-update maybeToken msg model =
-    let
-        profile =
-            model.profile
-    in
+update : Session -> Msg -> Model -> ( Model, Cmd Msg )
+update session msg model =
     case msg of
         ClickedDismissErrors ->
             ( { model | errors = [] }, Cmd.none )
 
-        ClickedFollow ->
-            case maybeToken of
-                Nothing ->
-                    ( { model | errors = model.errors ++ [ "You are currently signed out. You must be signed in to follow people." ] }
-                    , Cmd.none
-                    )
+        ClickedUnfollow followedAuthor ->
+            let
+                cmdFromAuth authToken =
+                    Author.requestUnfollow followedAuthor authToken
+                        |> Http.send CompletedFollowChange
+            in
+            session
+                |> Session.attempt "unfollow" cmdFromAuth
+                |> Util.updateFromResult model Cmd.none
 
-                Just token ->
-                    token
-                        |> Profile.toggleFollow
-                            (Profile.username profile)
-                            (Profile.following profile)
-                        |> Http.send CompletedFollow
-                        |> Tuple.pair model
+        ClickedFollow unfollowedAuthor ->
+            let
+                cmdFromAuth authToken =
+                    Author.requestFollow unfollowedAuthor authToken
+                        |> Http.send CompletedFollowChange
+            in
+            session
+                |> Session.attempt "follow" cmdFromAuth
+                |> Util.updateFromResult model Cmd.none
 
-        CompletedFollow (Ok newProfile) ->
-            ( { model | profile = newProfile }, Cmd.none )
+        CompletedFollowChange (Ok newAuthor) ->
+            ( { model | author = newAuthor }
+            , Cmd.none
+            )
 
-        CompletedFollow (Err error) ->
+        CompletedFollowChange (Err error) ->
             ( model, Cmd.none )
 
         GotFeedMsg subMsg ->
             let
                 ( newFeed, subCmd ) =
-                    Feed.update maybeToken subMsg model.feed
+                    Feed.update (Session.me session) subMsg model.feed
             in
-            ( { model | feed = newFeed }, Cmd.map GotFeedMsg subCmd )
-
-
-followButton : Profile -> Html Msg
-followButton profile =
-    Follow.button (\_ -> ClickedFollow)
-        (Profile.following profile)
-        (Profile.username profile)
+            ( { model | feed = newFeed }
+            , Cmd.map GotFeedMsg subCmd
+            )
 
 
 

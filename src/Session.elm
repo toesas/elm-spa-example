@@ -1,12 +1,15 @@
-port module Session exposing (Session, attempt, changes, clear, init, isLoggedIn, logout, me, store, timeZone, token, withTimeZone)
+port module Session exposing (LoggedInUser, Session, attempt, authToken, changes, clear, fromValue, init, isLoggedIn, loggedInUser, loggedInUserDecoder, logout, me, store, timeZone, withTimeZone)
 
 import AuthToken exposing (AuthToken)
-import Avatar
-import Json.Decode as Decode
+import Avatar exposing (Avatar)
+import Email exposing (Email)
+import Json.Decode as Decode exposing (Decoder)
+import Json.Decode.Pipeline exposing (custom, required)
 import Json.Encode as Encode exposing (Value)
 import Me exposing (Me)
+import Profile exposing (Profile)
 import Time
-import Username
+import Username exposing (Username)
 
 
 
@@ -14,20 +17,30 @@ import Username
 
 
 type Session
-    = Session
-        { user : Maybe ( Me, AuthToken )
-        , timeZone : Time.Zone
-        }
+    = Session Internals
+
+
+type alias Internals =
+    { timeZone : Time.Zone
+    , loggedInUser : Maybe LoggedInUser
+    }
+
+
+type alias LoggedInUser =
+    { me : Me
+    , email : Email
+    , profile : Profile
+    }
 
 
 
 -- CREATE
 
 
-init : Time.Zone -> Maybe ( Me, AuthToken ) -> Session
-init zone user =
+init : Time.Zone -> Maybe LoggedInUser -> Session
+init zone maybeUser =
     Session
-        { user = user
+        { loggedInUser = maybeUser
         , timeZone = zone
         }
 
@@ -47,7 +60,7 @@ withTimeZone zone (Session info) =
 
 isLoggedIn : Session -> Bool
 isLoggedIn (Session info) =
-    case info.user of
+    case info.loggedInUser of
         Just _ ->
             True
 
@@ -57,12 +70,18 @@ isLoggedIn (Session info) =
 
 me : Session -> Maybe Me
 me (Session info) =
-    Maybe.map Tuple.first info.user
+    Maybe.map .me info.loggedInUser
 
 
-token : Session -> Maybe AuthToken
-token (Session info) =
-    Maybe.map Tuple.second info.user
+loggedInUser : Session -> Maybe LoggedInUser
+loggedInUser (Session info) =
+    info.loggedInUser
+
+
+authToken : Session -> Maybe AuthToken
+authToken session =
+    me session
+        |> Maybe.map Me.authToken
 
 
 timeZone : Session -> Time.Zone
@@ -76,7 +95,7 @@ timeZone (Session info) =
 
 clear : Session -> Session
 clear (Session info) =
-    Session { info | user = Nothing }
+    Session { info | loggedInUser = Nothing }
 
 
 
@@ -84,27 +103,27 @@ clear (Session info) =
 
 
 attempt : String -> (AuthToken -> Cmd msg) -> Session -> Result String (Cmd msg)
-attempt attemptedCmd toCmd session =
-    case token session of
+attempt attemptedCmd toCmd (Session info) =
+    case info.loggedInUser of
         Nothing ->
-            Err ("You are signed out. Please sign in to " ++ attemptedCmd ++ ".")
+            Err ("Please sign in to " ++ attemptedCmd ++ ".")
 
-        Just authToken ->
-            Ok (toCmd authToken)
+        Just user ->
+            Ok (toCmd (Me.authToken user.me))
 
 
 
 -- STORE
 
 
-store : ( Me, AuthToken ) -> Cmd msg
-store ( myself, authToken ) =
+store : LoggedInUser -> Cmd msg
+store user =
     Encode.object
-        [ ( "email", Encode.string (Me.email myself) )
-        , ( "username", Username.encode (Me.username myself) )
-        , ( "bio", Maybe.withDefault Encode.null (Maybe.map Encode.string (Me.bio myself)) )
-        , ( "image", Avatar.encode (Me.avatar myself) )
-        , ( "token", AuthToken.encode authToken )
+        [ ( "email", Email.encode user.email )
+        , ( "username", Username.encode (Me.username user.me) )
+        , ( "bio", Maybe.withDefault Encode.null (Maybe.map Encode.string (Profile.bio user.profile)) )
+        , ( "image", Avatar.encode (Profile.avatar user.profile) )
+        , ( "token", AuthToken.encode (Me.authToken user.me) )
         ]
         |> Encode.encode 0
         |> Just
@@ -124,16 +143,24 @@ port storeSession : Maybe String -> Cmd msg
 
 
 changes : Time.Zone -> Sub Session
-changes zone =
-    onSessionChange (fromValue zone)
+changes tz =
+    onSessionChange (fromValue tz)
 
 
 port onSessionChange : (Value -> msg) -> Sub msg
 
 
 fromValue : Time.Zone -> Value -> Session
-fromValue zone value =
+fromValue tz value =
     Session
-        { user = Result.toMaybe (Decode.decodeValue Me.decoderWithToken value)
-        , timeZone = zone
+        { loggedInUser = Result.toMaybe (Decode.decodeValue loggedInUserDecoder value)
+        , timeZone = tz
         }
+
+
+loggedInUserDecoder : Decoder LoggedInUser
+loggedInUserDecoder =
+    Decode.succeed LoggedInUser
+        |> custom Me.decoder
+        |> required "email" Email.decoder
+        |> custom Profile.decoder

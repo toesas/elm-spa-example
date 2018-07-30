@@ -10,6 +10,7 @@ import Html.Attributes exposing (..)
 import Me exposing (Me)
 import Profile exposing (Profile)
 import Route exposing (Route)
+import Session exposing (LoggedInUser)
 import Username exposing (Username)
 import Util
 import Views.Spinner exposing (spinner)
@@ -41,19 +42,19 @@ isLoading is for determining whether we should show a loading spinner
 in the header. (This comes up during slow page transitions.)
 
 -}
-frame : Bool -> Maybe Me -> ActivePage -> { title : String, content : Html msg } -> Document msg
-frame isLoading maybeMe page { title, content } =
+frame : Bool -> Maybe LoggedInUser -> ActivePage -> { title : String, content : Html msg } -> Document msg
+frame isLoading loggedInUser page { title, content } =
     { title = title ++ " — Conduit"
     , body =
-        [ viewHeader page maybeMe isLoading
+        [ viewHeader page loggedInUser isLoading
         , content
         , viewFooter
         ]
     }
 
 
-viewHeader : ActivePage -> Maybe Me -> Bool -> Html msg
-viewHeader page user isLoading =
+viewHeader : ActivePage -> Maybe LoggedInUser -> Bool -> Html msg
+viewHeader page loggedInUser isLoading =
     nav [ class "navbar navbar-light" ]
         [ div [ class "container" ]
             [ a [ class "navbar-brand", Route.href Route.Home ]
@@ -66,29 +67,29 @@ viewHeader page user isLoading =
                     text ""
                 )
                     :: navbarLink page Route.Home [ text "Home" ]
-                    :: viewSignIn page user
+                    :: viewSignIn page loggedInUser
             ]
         ]
 
 
-viewSignIn : ActivePage -> Maybe Me -> List (Html msg)
-viewSignIn page maybeMe =
+viewSignIn : ActivePage -> Maybe LoggedInUser -> List (Html msg)
+viewSignIn page loggedInUser =
     let
         linkTo =
             navbarLink page
     in
-    case maybeMe of
+    case loggedInUser of
         Nothing ->
             [ linkTo Route.Login [ text "Sign in" ]
             , linkTo Route.Register [ text "Sign up" ]
             ]
 
-        Just me ->
+        Just { me, profile } ->
             [ linkTo Route.NewArticle [ i [ class "ion-compose" ] [], text " New Post" ]
             , linkTo Route.Settings [ i [ class "ion-gear-a" ] [], text " Settings" ]
             , linkTo
                 (Route.Profile (Me.username me))
-                [ img [ class "user-pic", Avatar.src (Me.avatar me) ] []
+                [ img [ class "user-pic", Avatar.src (Profile.avatar profile) ] []
                 , Username.toHtml (Me.username me)
                 ]
             , linkTo Route.Logout [ text "Sign out" ]
