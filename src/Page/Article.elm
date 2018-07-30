@@ -7,7 +7,7 @@ import Article exposing (Article, Full)
 import Article.Body
 import Article.Comment as Comment exposing (Comment)
 import Article.Slug as Slug exposing (Slug)
-import AuthToken exposing (AuthToken, withAuthorization)
+import AuthToken exposing (AuthToken, addAuthHeader)
 import Author exposing (Author(..), FollowedAuthor, UnfollowedAuthor)
 import Avatar
 import Browser.Navigation as Nav
@@ -17,7 +17,6 @@ import Html.Attributes exposing (attribute, class, disabled, href, id, placehold
 import Html.Events exposing (onClick, onInput, onSubmit)
 import Http
 import HttpBuilder exposing (RequestBuilder, withBody, withExpect, withQueryParams)
-import Me exposing (Me)
 import Page.Errored exposing (PageLoadError, pageLoadError)
 import Profile exposing (Profile)
 import Route
@@ -47,15 +46,15 @@ type alias Model =
     }
 
 
-init : Maybe Me -> Slug -> Task PageLoadError Model
-init maybeMe slug =
+init : Maybe AuthToken -> Slug -> Task PageLoadError Model
+init maybeToken slug =
     let
         loadArticle =
-            Article.fetch maybeMe slug
+            Article.fetch maybeToken slug
                 |> Http.toTask
 
         loadComments =
-            Comment.list maybeMe slug
+            Comment.list maybeToken slug
                 |> Http.toTask
 
         handleLoadError _ =
@@ -75,8 +74,8 @@ view session model =
         loggedInUser =
             Session.loggedInUser session
 
-        maybeMe =
-            Maybe.map .me loggedInUser
+        maybeToken =
+            Maybe.map .authToken loggedInUser
 
         article =
             model.article
@@ -123,7 +122,7 @@ view session model =
                 , div [ class "row" ]
                     [ div [ class "col-xs-12 col-md-8 offset-md-2" ] <|
                         viewAddComment postingDisabled loggedInUser
-                            :: List.map (viewComment timeZone maybeMe) model.comments
+                            :: List.map (viewComment timeZone maybeToken) model.comments
                     ]
                 ]
             ]
@@ -170,7 +169,7 @@ viewAddComment postingDisabled loggedInUser =
                 , text " to add comments on this article."
                 ]
 
-        Just { me, profile } ->
+        Just { profile } ->
             Html.form [ class "card comment-form", onSubmit ClickedPostComment ]
                 [ div [ class "card-block" ]
                     [ textarea
@@ -203,7 +202,7 @@ viewButtons article author =
             Follow.followButton ClickedFollow unfollowedAuthor
                 |> withFavoriteButton article
 
-        IsMe _ _ ->
+        IsAuthToken _ _ ->
             [ editButton article
             , text " "
             , deleteButton article
@@ -218,8 +217,8 @@ withFavoriteButton article html =
     ]
 
 
-viewComment : Time.Zone -> Maybe Me -> Comment -> Html Msg
-viewComment timeZone maybeMe comment =
+viewComment : Time.Zone -> Maybe AuthToken -> Comment -> Html Msg
+viewComment timeZone maybeToken comment =
     let
         author =
             Comment.author comment
@@ -231,9 +230,9 @@ viewComment timeZone maybeMe comment =
             Author.username author
 
         isMine =
-            case maybeMe of
-                Just me ->
-                    Me.username me == authorUsername
+            case maybeToken of
+                Just authToken ->
+                    AuthToken.username authToken == authorUsername
 
                 Nothing ->
                     False
@@ -303,15 +302,15 @@ update navKey session msg model =
             ( { model | errors = [] }, Cmd.none )
 
         ClickedFavorite ->
-            case Session.me session of
+            case Session.authToken session of
                 Nothing ->
                     ( { model | errors = model.errors ++ [ "Please sign in to favorite this article." ] }
                     , Cmd.none
                     )
 
-                Just me ->
+                Just authToken ->
                     ( model
-                    , Article.toggleFavorite article me
+                    , Article.toggleFavorite article authToken
                         |> Http.toTask
                         |> Task.map (Article.fromPreview oldBody)
                         |> Task.attempt CompletedFavoriteChange
@@ -365,15 +364,15 @@ update navKey session msg model =
                 ( model, Cmd.none )
 
             else
-                case Session.me session of
+                case Session.authToken session of
                     Nothing ->
                         ( { model | errors = model.errors ++ [ "Please sign in to post a comment." ] }
                         , Cmd.none
                         )
 
-                    Just me ->
+                    Just authToken ->
                         ( { model | commentInFlight = True }
-                        , me
+                        , authToken
                             |> Comment.post (Article.slug model.article) comment
                             |> Http.send CompletedPostComment
                         )
@@ -440,7 +439,7 @@ delete : Slug -> AuthToken -> Http.Request ()
 delete slug token =
     Article.url slug []
         |> HttpBuilder.delete
-        |> withAuthorization (Just token)
+        |> addAuthHeader (Just token)
         |> HttpBuilder.toRequest
 
 

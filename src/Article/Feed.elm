@@ -12,12 +12,11 @@ module Article.Feed
 import Api
 import Article exposing (Article, Preview)
 import Article.Tag as Tag exposing (Tag)
-import AuthToken exposing (AuthToken, withAuthorization)
+import AuthToken exposing (AuthToken, addAuthHeader)
 import Http
 import HttpBuilder exposing (RequestBuilder, withExpect, withQueryParams)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (required)
-import Me exposing (Me)
 import Username exposing (Username)
 
 
@@ -54,8 +53,8 @@ defaultListConfig =
     }
 
 
-list : ListConfig -> Maybe Me -> Http.Request Feed
-list config maybeMe =
+list : ListConfig -> Maybe AuthToken -> Http.Request Feed
+list config maybeToken =
     [ Maybe.map (\tag -> ( "tag", Tag.toString tag )) config.tag
     , Maybe.map (\author -> ( "author", Username.toString author )) config.author
     , Maybe.map (\favorited -> ( "favorited", Username.toString favorited )) config.favorited
@@ -63,8 +62,8 @@ list config maybeMe =
     , Just ( "offset", String.fromInt config.offset )
     ]
         |> List.filterMap identity
-        |> buildFromQueryParams maybeMe (Api.url [ "articles" ])
-        |> withAuthorization (Maybe.map Me.authToken maybeMe)
+        |> buildFromQueryParams maybeToken (Api.url [ "articles" ])
+        |> addAuthHeader maybeToken
         |> HttpBuilder.toRequest
 
 
@@ -85,13 +84,13 @@ defaultFeedConfig =
     }
 
 
-feed : FeedConfig -> Me -> Http.Request Feed
-feed config me =
+feed : FeedConfig -> AuthToken -> Http.Request Feed
+feed config authToken =
     [ ( "limit", String.fromInt config.limit )
     , ( "offset", String.fromInt config.offset )
     ]
-        |> buildFromQueryParams (Just me) (Api.url [ "articles", "feed" ])
-        |> withAuthorization (Just (Me.authToken me))
+        |> buildFromQueryParams (Just authToken) (Api.url [ "articles", "feed" ])
+        |> addAuthHeader (Just authToken)
         |> HttpBuilder.toRequest
 
 
@@ -99,10 +98,10 @@ feed config me =
 -- SERIALIZATION
 
 
-decoder : Maybe Me -> Decoder Feed
-decoder maybeMe =
+decoder : Maybe AuthToken -> Decoder Feed
+decoder maybeToken =
     Decode.succeed Feed
-        |> required "articles" (Decode.list (Article.previewDecoder maybeMe))
+        |> required "articles" (Decode.list (Article.previewDecoder maybeToken))
         |> required "articlesCount" Decode.int
 
 
@@ -110,8 +109,8 @@ decoder maybeMe =
 -- REQUEST
 
 
-buildFromQueryParams : Maybe Me -> String -> List ( String, String ) -> RequestBuilder Feed
-buildFromQueryParams maybeMe url queryParams =
+buildFromQueryParams : Maybe AuthToken -> String -> List ( String, String ) -> RequestBuilder Feed
+buildFromQueryParams maybeToken url queryParams =
     HttpBuilder.get url
-        |> withExpect (Http.expectJson (decoder maybeMe))
+        |> withExpect (Http.expectJson (decoder maybeToken))
         |> withQueryParams queryParams

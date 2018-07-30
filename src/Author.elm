@@ -49,13 +49,12 @@ There are still ways we could mess things up (e.g. make a button that calls Auth
 -}
 
 import Api
-import AuthToken exposing (AuthToken, withAuthorization)
+import AuthToken exposing (AuthToken, addAuthHeader)
 import Http
 import HttpBuilder exposing (RequestBuilder, withExpect)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (custom, required)
 import Json.Encode as Encode exposing (Value)
-import Me exposing (Me)
 import Profile exposing (Profile)
 import Username exposing (Username)
 
@@ -71,7 +70,7 @@ users we _are_ following, and we can't perform either for ourselves.
 type Author
     = IsFollowing FollowedAuthor
     | IsNotFollowing UnfollowedAuthor
-    | IsMe Username Profile
+    | IsAuthToken Username Profile
 
 
 {-| An author we're following.
@@ -91,7 +90,7 @@ type UnfollowedAuthor
 username : Author -> Username
 username author =
     case author of
-        IsMe val _ ->
+        IsAuthToken val _ ->
             val
 
         IsFollowing (FollowedAuthor val _) ->
@@ -106,7 +105,7 @@ username author =
 profile : Author -> Profile
 profile author =
     case author of
-        IsMe _ val ->
+        IsAuthToken _ val ->
             val
 
         IsFollowing (FollowedAuthor _ val) ->
@@ -148,12 +147,12 @@ unfollowedProfile (UnfollowedAuthor _ val) =
 -- FETCH
 
 
-fetch : Username -> Maybe Me -> Http.Request Author
-fetch uname maybeMe =
+fetch : Username -> Maybe AuthToken -> Http.Request Author
+fetch uname maybeToken =
     Api.url [ "profiles", Username.toString uname ]
         |> HttpBuilder.get
-        |> HttpBuilder.withExpect (Http.expectJson (Decode.field "profile" (decoder maybeMe)))
-        |> Me.withAuthorization maybeMe
+        |> HttpBuilder.withExpect (Http.expectJson (Decode.field "profile" (decoder maybeToken)))
+        |> AuthToken.addAuthHeader maybeToken
         |> HttpBuilder.toRequest
 
 
@@ -189,7 +188,7 @@ requestHelp :
 requestHelp builderFromUrl uname authToken =
     Api.url [ "profiles", Username.toString uname, "follow" ]
         |> builderFromUrl
-        |> withAuthorization (Just authToken)
+        |> addAuthHeader (Just authToken)
         |> withExpect (Http.expectJson (Decode.field "profile" (decoder Nothing)))
         |> HttpBuilder.toRequest
 
@@ -198,27 +197,27 @@ requestHelp builderFromUrl uname authToken =
 -- SERIALIZATION
 
 
-decoder : Maybe Me -> Decoder Author
-decoder maybeMe =
+decoder : Maybe AuthToken -> Decoder Author
+decoder maybeToken =
     Decode.succeed Tuple.pair
         |> custom Profile.decoder
         |> required "uname" Username.decoder
-        |> Decode.andThen (decodeFromPair maybeMe)
+        |> Decode.andThen (decodeFromPair maybeToken)
 
 
-decodeFromPair : Maybe Me -> ( Profile, Username ) -> Decoder Author
-decodeFromPair maybeMe ( prof, uname ) =
+decodeFromPair : Maybe AuthToken -> ( Profile, Username ) -> Decoder Author
+decodeFromPair maybeToken ( prof, uname ) =
     let
-        authorIsMe =
-            case maybeMe of
+        authorIsAuthToken =
+            case maybeToken of
                 Nothing ->
                     False
 
-                Just me ->
-                    Me.username me == uname
+                Just authToken ->
+                    AuthToken.username authToken == uname
     in
-    if authorIsMe then
-        Decode.succeed (IsMe uname prof)
+    if authorIsAuthToken then
+        Decode.succeed (IsAuthToken uname prof)
 
     else
         -- Only bother decoding the "following" field if it's someone

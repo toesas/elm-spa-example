@@ -1,7 +1,7 @@
 module Page.Settings exposing (ExternalMsg(..), Model, Msg, init, update, view)
 
 import Api
-import AuthToken exposing (AuthToken, withAuthorization)
+import AuthToken exposing (AuthToken, addAuthHeader)
 import Avatar
 import Browser.Navigation as Nav
 import Email exposing (Email)
@@ -13,7 +13,6 @@ import HttpBuilder
 import Json.Decode as Decode exposing (Decoder, decodeString, field, list, string)
 import Json.Decode.Pipeline exposing (optional)
 import Json.Encode as Encode
-import Me exposing (Me)
 import Profile exposing (Profile)
 import Route
 import Session exposing (LoggedInUser, Session)
@@ -41,14 +40,14 @@ type alias Form =
     }
 
 
-init : Me -> Email -> Profile -> Model
-init me email profile =
+init : AuthToken -> Email -> Profile -> Model
+init authToken email profile =
     { errors = []
     , form =
         { avatar = Avatar.toMaybeString (Profile.avatar profile)
         , email = Email.toString email
         , bio = Maybe.withDefault "" (Profile.bio profile)
-        , username = Username.toString (Me.username me)
+        , username = Username.toString (AuthToken.username authToken)
         , password = Nothing
         }
     }
@@ -209,7 +208,7 @@ update navKey authToken msg model =
                 serverErrors =
                     error
                         |> Api.listErrors "errors" errorsDecoder
-                        |> List.map (\errorMessage -> ( Server, errorMessage ))
+                        |> List.map (\errorAuthTokenssage -> ( Server, errorAuthTokenssage ))
             in
             ( ( { model | errors = List.append model.errors serverErrors }
               , Cmd.none
@@ -269,8 +268,8 @@ errorsDecoder =
 optionalError : String -> Decoder (List String -> a) -> Decoder a
 optionalError fieldName =
     let
-        errorToString errorMessage =
-            String.join " " [ fieldName, errorMessage ]
+        errorToString errorAuthTokenssage =
+            String.join " " [ fieldName, errorAuthTokenssage ]
     in
     optional fieldName (list (Decode.map errorToString string)) []
 
@@ -311,5 +310,5 @@ edit authToken validForm =
         |> HttpBuilder.put
         |> HttpBuilder.withExpect expect
         |> HttpBuilder.withBody body
-        |> withAuthorization (Just authToken)
+        |> addAuthHeader (Just authToken)
         |> HttpBuilder.toRequest

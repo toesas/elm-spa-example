@@ -11,7 +11,6 @@ import Avatar exposing (Avatar)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Http
-import Me exposing (Me)
 import Page.Errored exposing (PageLoadError, pageLoadError)
 import Profile exposing (Profile)
 import Session exposing (Session)
@@ -37,19 +36,19 @@ type alias Model =
     }
 
 
-init : Maybe Me -> Username -> Task PageLoadError Model
-init maybeMe username =
+init : Maybe AuthToken -> Username -> Task PageLoadError Model
+init maybeToken username =
     let
         config : ListConfig
         config =
             { defaultListConfig | limit = 5, author = Just username }
 
         loadProfile =
-            Author.fetch username maybeMe
+            Author.fetch username maybeToken
                 |> Http.toTask
 
         loadFeedSources =
-            Feed.init maybeMe (defaultFeedSources username)
+            Feed.init maybeToken (defaultFeedSources username)
 
         handleLoadError _ =
             "Profile is currently unavailable."
@@ -74,7 +73,7 @@ view session model =
 
         ( title, followButton ) =
             case model.author of
-                IsMe _ _ ->
+                IsAuthToken _ _ ->
                     ( "My Profile"
                     , text ""
                     )
@@ -173,7 +172,7 @@ update session msg model =
         GotFeedMsg subMsg ->
             let
                 ( newFeed, subCmd ) =
-                    Feed.update (Session.me session) subMsg model.feed
+                    Feed.update (Session.authToken session) subMsg model.feed
             in
             ( { model | feed = newFeed }
             , Cmd.map GotFeedMsg subCmd

@@ -7,7 +7,6 @@ import Browser exposing (Document)
 import Browser.Navigation as Nav
 import Html exposing (..)
 import Json.Decode as Decode exposing (Value)
-import Me exposing (Me)
 import Page.Article as Article
 import Page.Article.Editor as Editor
 import Page.Errored as Errored exposing (PageLoadError)
@@ -271,7 +270,7 @@ setRoute maybeRoute model =
         Just (Route.EditArticle slug) ->
             if Session.isLoggedIn model.session then
                 transition (LoadedEditArticle slug)
-                    (Editor.initEdit (Session.me model.session) slug)
+                    (Editor.initEdit (Session.authToken model.session) slug)
 
             else
                 errored Page.Other "You must be signed in to edit an article."
@@ -279,13 +278,13 @@ setRoute maybeRoute model =
         Just Route.Settings ->
             case Session.loggedInUser model.session of
                 Just loggedInUser ->
-                    ( { model | pageState = Loaded (Settings (Settings.init loggedInUser.me loggedInUser.email loggedInUser.profile)) }, Cmd.none )
+                    ( { model | pageState = Loaded (Settings (Settings.init loggedInUser.authToken loggedInUser.email loggedInUser.profile)) }, Cmd.none )
 
                 Nothing ->
                     errored Page.Settings "You must be signed in to access your settings."
 
         Just Route.Home ->
-            transition LoadedHome (Home.init (Session.me model.session))
+            transition LoadedHome (Home.init (Session.authToken model.session))
 
         Just Route.Root ->
             ( model, Route.replaceUrl model.navKey Route.Home )
@@ -305,17 +304,17 @@ setRoute maybeRoute model =
             ( { model | pageState = Loaded (Register Register.initialModel) }, Cmd.none )
 
         Just (Route.Profile username) ->
-            transition (LoadedProfile username) (Profile.init (Session.me model.session) username)
+            transition (LoadedProfile username) (Profile.init (Session.authToken model.session) username)
 
         Just (Route.Article slug) ->
-            transition LoadedArticle (Article.init (Session.me model.session) slug)
+            transition LoadedArticle (Article.init (Session.authToken model.session) slug)
 
 
 pageErrored : Model -> ActivePage -> String -> ( Model, Cmd msg )
-pageErrored model activePage errorMessage =
+pageErrored model activePage errorAuthTokenssage =
     let
         error =
-            Errored.pageLoadError activePage errorMessage
+            Errored.pageLoadError activePage errorAuthTokenssage
     in
     ( { model | pageState = Loaded (Errored error) }, Cmd.none )
 
@@ -480,7 +479,7 @@ updateCurrentPage page msg model =
                     )
 
         ( GotHomeMsg subMsg, Home subModel ) ->
-            toPage Home GotHomeMsg (Home.update (Session.me session)) subMsg subModel
+            toPage Home GotHomeMsg (Home.update (Session.authToken session)) subMsg subModel
 
         ( GotProfileMsg subMsg, Profile username subModel ) ->
             toPage (Profile username) GotProfileMsg (Profile.update model.session) subMsg subModel
@@ -489,13 +488,13 @@ updateCurrentPage page msg model =
             toPage Article GotArticleMsg (Article.update model.navKey model.session) subMsg subModel
 
         ( GotEditorMsg subMsg, Editor slug subModel ) ->
-            case Session.me model.session of
+            case Session.authToken model.session of
                 Nothing ->
                     errored Page.Other
                         "You must be signed in to post or edit articles."
 
-                Just me ->
-                    toPage (Editor slug) GotEditorMsg (Editor.update me model.navKey) subMsg subModel
+                Just authToken ->
+                    toPage (Editor slug) GotEditorMsg (Editor.update authToken model.navKey) subMsg subModel
 
         ( _, NotFound ) ->
             -- Disregard incoming messages when we're on the

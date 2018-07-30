@@ -24,13 +24,13 @@ type PageLoadError
 
 type alias Model =
     { activePage : ActivePage
-    , errorMessage : String
+    , errorAuthTokenssage : String
     }
 
 
 pageLoadError : ActivePage -> String -> PageLoadError
-pageLoadError activePage errorMessage =
-    PageLoadError { activePage = activePage, errorMessage = errorMessage }
+pageLoadError activePage errorAuthTokenssage =
+    PageLoadError { activePage = activePage, errorAuthTokenssage = errorAuthTokenssage }
 
 
 
@@ -44,6 +44,6 @@ view session (PageLoadError model) =
         main_ [ id "content", class "container", tabindex -1 ]
             [ h1 [] [ text "Error Loading Page" ]
             , div [ class "row" ]
-                [ p [] [ text model.errorMessage ] ]
+                [ p [] [ text model.errorAuthTokenssage ] ]
             ]
     }

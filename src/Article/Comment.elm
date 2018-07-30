@@ -13,7 +13,7 @@ module Article.Comment
 import Api
 import Article exposing (Article)
 import Article.Slug as Slug exposing (Slug)
-import AuthToken exposing (AuthToken, withAuthorization)
+import AuthToken exposing (AuthToken, addAuthHeader)
 import Author exposing (Author)
 import CommentId exposing (CommentId)
 import Http
@@ -21,7 +21,6 @@ import HttpBuilder exposing (RequestBuilder, withExpect, withQueryParams)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (custom, required)
 import Json.Encode as Encode exposing (Value)
-import Me exposing (Me)
 import Profile exposing (Profile)
 import Time
 import Util
@@ -71,12 +70,12 @@ author (Comment comment) =
 -- LIST
 
 
-list : Maybe Me -> Slug -> Http.Request (List Comment)
-list maybeMe articleSlug =
+list : Maybe AuthToken -> Slug -> Http.Request (List Comment)
+list maybeToken articleSlug =
     allCommentsUrl articleSlug []
         |> HttpBuilder.get
-        |> HttpBuilder.withExpect (Http.expectJson (Decode.field "comments" (Decode.list (decoder maybeMe))))
-        |> Me.withAuthorization maybeMe
+        |> HttpBuilder.withExpect (Http.expectJson (Decode.field "comments" (Decode.list (decoder maybeToken))))
+        |> AuthToken.addAuthHeader maybeToken
         |> HttpBuilder.toRequest
 
 
@@ -84,13 +83,13 @@ list maybeMe articleSlug =
 -- POST
 
 
-post : Slug -> String -> Me -> Http.Request Comment
-post articleSlug commentBody me =
+post : Slug -> String -> AuthToken -> Http.Request Comment
+post articleSlug commentBody authToken =
     allCommentsUrl articleSlug []
         |> HttpBuilder.post
         |> HttpBuilder.withBody (Http.jsonBody (encodeCommentBody commentBody))
-        |> HttpBuilder.withExpect (Http.expectJson (Decode.field "comment" (decoder (Just me))))
-        |> Me.withAuthorization (Just me)
+        |> HttpBuilder.withExpect (Http.expectJson (Decode.field "comment" (decoder (Just authToken))))
+        |> AuthToken.addAuthHeader (Just authToken)
         |> HttpBuilder.toRequest
 
 
@@ -107,7 +106,7 @@ delete : Slug -> CommentId -> AuthToken -> Http.Request ()
 delete articleSlug commentId token =
     commentUrl articleSlug commentId
         |> HttpBuilder.delete
-        |> withAuthorization (Just token)
+        |> addAuthHeader (Just token)
         |> HttpBuilder.toRequest
 
 
@@ -115,13 +114,13 @@ delete articleSlug commentId token =
 -- SERIALIZATION
 
 
-decoder : Maybe Me -> Decoder Comment
-decoder maybeMe =
+decoder : Maybe AuthToken -> Decoder Comment
+decoder maybeToken =
     Decode.succeed CommentRecord
         |> required "id" CommentId.decoder
         |> required "body" Decode.string
         |> required "createdAt" Util.dateStringDecoder
-        |> required "author" (Author.decoder maybeMe)
+        |> required "author" (Author.decoder maybeToken)
         |> Decode.map Comment
 
 

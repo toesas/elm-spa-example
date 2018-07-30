@@ -31,7 +31,7 @@ import Api
 import Article.Body as Body exposing (Body)
 import Article.Slug as Slug exposing (Slug)
 import Article.Tag as Tag exposing (Tag)
-import AuthToken exposing (AuthToken, withAuthorization)
+import AuthToken exposing (AuthToken, addAuthHeader)
 import Author exposing (Author)
 import Html exposing (Attribute, Html)
 import Http
@@ -40,7 +40,6 @@ import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (custom, hardcoded, required)
 import Json.Encode as Encode
 import Markdown
-import Me exposing (Me)
 import Profile exposing (Profile)
 import Time
 import Username as Username exposing (Username)
@@ -78,7 +77,7 @@ type Article a
     = Article Internals a
 
 
-{-| Metadata about the article - its title, description, and so on.
+{-| AuthTokentadata about the article - its title, description, and so on.
 
 Importantly, this module's public API exposes a way to read this metadata, but
 not to alter it. This is read-only information!
@@ -102,14 +101,14 @@ where those boundaries are, and instead expose a "getter and setter" for every
 field in the record, the result is an API with no more guarantees than if you'd
 exposed the entire record directly! It is so important to me that beginners not
 fall into the terrible "getters and setters" trap that I've exposed this
-Metadata record instead of exposing a single function for each of its fields,
+AuthTokentadata record instead of exposing a single function for each of its fields,
 as I did originally. This record is not a bad way to do it, by any means,
 but if this seems at odds with <https://youtu.be/x1FU3e0sT1I> - now you know why!
 See commit c2640ae3abd60262cdaafe6adee3f41d84cd85c3 for how it looked before.
 )
 
 -}
-type alias Metadata =
+type alias AuthTokentadata =
     { description : String
     , title : String
     , tags : List String
@@ -122,7 +121,7 @@ type alias Metadata =
 type alias Internals =
     { slug : Slug
     , author : Author
-    , metadata : Metadata
+    , metadata : AuthTokentadata
     }
 
 
@@ -143,7 +142,7 @@ author (Article internals _) =
     internals.author
 
 
-metadata : Article a -> Metadata
+metadata : Article a -> AuthTokentadata
 metadata (Article internals _) =
     internals.metadata
 
@@ -184,31 +183,31 @@ fromPreview newBody (Article info Preview) =
 -- SERIALIZATION
 
 
-previewDecoder : Maybe Me -> Decoder (Article Preview)
-previewDecoder maybeMe =
+previewDecoder : Maybe AuthToken -> Decoder (Article Preview)
+previewDecoder maybeToken =
     Decode.succeed Article
-        |> custom (internalsDecoder maybeMe)
+        |> custom (internalsDecoder maybeToken)
         |> hardcoded Preview
 
 
-fullDecoder : Maybe Me -> Decoder (Article Full)
-fullDecoder maybeMe =
+fullDecoder : Maybe AuthToken -> Decoder (Article Full)
+fullDecoder maybeToken =
     Decode.succeed Article
-        |> custom (internalsDecoder maybeMe)
+        |> custom (internalsDecoder maybeToken)
         |> required "body" (Decode.map Full Body.decoder)
 
 
-internalsDecoder : Maybe Me -> Decoder Internals
-internalsDecoder maybeMe =
+internalsDecoder : Maybe AuthToken -> Decoder Internals
+internalsDecoder maybeToken =
     Decode.succeed Internals
         |> required "slug" Slug.decoder
-        |> required "author" (Author.decoder maybeMe)
+        |> required "author" (Author.decoder maybeToken)
         |> custom metadataDecoder
 
 
-metadataDecoder : Decoder Metadata
+metadataDecoder : Decoder AuthTokentadata
 metadataDecoder =
-    Decode.succeed Metadata
+    Decode.succeed AuthTokentadata
         |> required "description" (Decode.map (Maybe.withDefault "") (Decode.nullable Decode.string))
         |> required "title" Decode.string
         |> required "tagList" (Decode.list Decode.string)
@@ -221,18 +220,18 @@ metadataDecoder =
 -- SINGLE
 
 
-fetch : Maybe Me -> Slug -> Http.Request (Article Full)
-fetch maybeMe articleSlug =
+fetch : Maybe AuthToken -> Slug -> Http.Request (Article Full)
+fetch maybeToken articleSlug =
     let
         expect =
-            fullDecoder maybeMe
+            fullDecoder maybeToken
                 |> Decode.field "article"
                 |> Http.expectJson
     in
     url articleSlug []
         |> HttpBuilder.get
         |> HttpBuilder.withExpect expect
-        |> withAuthorization (Maybe.map Me.authToken maybeMe)
+        |> addAuthHeader maybeToken
         |> HttpBuilder.toRequest
 
 
@@ -240,42 +239,39 @@ fetch maybeMe articleSlug =
 -- FAVORITE
 
 
-toggleFavorite : Article a -> Me -> Http.Request (Article Preview)
-toggleFavorite (Article info _) me =
+toggleFavorite : Article a -> AuthToken -> Http.Request (Article Preview)
+toggleFavorite (Article info _) authToken =
     if info.metadata.favorited then
-        unfavorite info.slug me
+        unfavorite info.slug authToken
 
     else
-        favorite info.slug me
+        favorite info.slug authToken
 
 
-favorite : Slug -> Me -> Http.Request (Article Preview)
-favorite articleSlug me =
-    buildFavorite HttpBuilder.post articleSlug me
+favorite : Slug -> AuthToken -> Http.Request (Article Preview)
+favorite articleSlug authToken =
+    buildFavorite HttpBuilder.post articleSlug authToken
 
 
-unfavorite : Slug -> Me -> Http.Request (Article Preview)
-unfavorite articleSlug me =
-    buildFavorite HttpBuilder.delete articleSlug me
+unfavorite : Slug -> AuthToken -> Http.Request (Article Preview)
+unfavorite articleSlug authToken =
+    buildFavorite HttpBuilder.delete articleSlug authToken
 
 
 buildFavorite :
     (String -> RequestBuilder a)
     -> Slug
-    -> Me
+    -> AuthToken
     -> Http.Request (Article Preview)
-buildFavorite builderFromUrl articleSlug me =
+buildFavorite builderFromUrl articleSlug authToken =
     let
-        authToken =
-            Me.authToken me
-
         expect =
-            previewDecoder (Just me)
+            previewDecoder (Just authToken)
                 |> Decode.field "article"
                 |> Http.expectJson
     in
     builderFromUrl (url articleSlug [ "favorite" ])
-        |> withAuthorization (Just authToken)
+        |> addAuthHeader (Just authToken)
         |> withExpect expect
         |> HttpBuilder.toRequest
 

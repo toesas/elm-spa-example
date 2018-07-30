@@ -1,4 +1,4 @@
-port module Session exposing (LoggedInUser, Session, attempt, authToken, changes, clear, fromValue, init, isLoggedIn, loggedInUser, loggedInUserDecoder, logout, me, store, timeZone, withTimeZone)
+port module Session exposing (LoggedInUser, Session, attempt, authToken, changes, clear, fromValue, init, isLoggedIn, loggedInUser, loggedInUserDecoder, logout, store, timeZone, withTimeZone)
 
 import AuthToken exposing (AuthToken)
 import Avatar exposing (Avatar)
@@ -6,7 +6,6 @@ import Email exposing (Email)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (custom, required)
 import Json.Encode as Encode exposing (Value)
-import Me exposing (Me)
 import Profile exposing (Profile)
 import Time
 import Username exposing (Username)
@@ -27,7 +26,7 @@ type alias Internals =
 
 
 type alias LoggedInUser =
-    { me : Me
+    { authToken : AuthToken
     , email : Email
     , profile : Profile
     }
@@ -68,20 +67,14 @@ isLoggedIn (Session info) =
             False
 
 
-me : Session -> Maybe Me
-me (Session info) =
-    Maybe.map .me info.loggedInUser
-
-
 loggedInUser : Session -> Maybe LoggedInUser
 loggedInUser (Session info) =
     info.loggedInUser
 
 
 authToken : Session -> Maybe AuthToken
-authToken session =
-    me session
-        |> Maybe.map Me.authToken
+authToken (Session info) =
+    Maybe.map .authToken info.loggedInUser
 
 
 timeZone : Session -> Time.Zone
@@ -109,7 +102,7 @@ attempt attemptedCmd toCmd (Session info) =
             Err ("Please sign in to " ++ attemptedCmd ++ ".")
 
         Just user ->
-            Ok (toCmd (Me.authToken user.me))
+            Ok (toCmd user.authToken)
 
 
 
@@ -120,10 +113,10 @@ store : LoggedInUser -> Cmd msg
 store user =
     Encode.object
         [ ( "email", Email.encode user.email )
-        , ( "username", Username.encode (Me.username user.me) )
+        , ( "username", Username.encode (AuthToken.username user.authToken) )
         , ( "bio", Maybe.withDefault Encode.null (Maybe.map Encode.string (Profile.bio user.profile)) )
         , ( "image", Avatar.encode (Profile.avatar user.profile) )
-        , ( "token", AuthToken.encode (Me.authToken user.me) )
+        , ( "token", AuthToken.encode user.authToken )
         ]
         |> Encode.encode 0
         |> Just
@@ -161,6 +154,6 @@ fromValue tz value =
 loggedInUserDecoder : Decoder LoggedInUser
 loggedInUserDecoder =
     Decode.succeed LoggedInUser
-        |> custom Me.decoder
+        |> custom AuthToken.decoder
         |> required "email" Email.decoder
         |> custom Profile.decoder

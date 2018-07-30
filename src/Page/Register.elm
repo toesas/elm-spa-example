@@ -10,7 +10,6 @@ import Http
 import Json.Decode as Decode exposing (Decoder, decodeString, field, string)
 import Json.Decode.Pipeline exposing (optional)
 import Json.Encode as Encode
-import Me exposing (Me)
 import Route exposing (Route)
 import Session exposing (LoggedInUser, Session)
 import Validate exposing (Valid, Validator, fromValid, ifBlank, validate)
@@ -148,7 +147,7 @@ update navKey msg model =
                 serverErrors =
                     error
                         |> Api.listErrors "errors" errorsDecoder
-                        |> List.map (\errorMessage -> ( Server, errorMessage ))
+                        |> List.map (\errorAuthTokenssage -> ( Server, errorAuthTokenssage ))
             in
             ( ( { model | errors = List.append model.errors serverErrors }
               , Cmd.none
@@ -219,8 +218,8 @@ errorsDecoder =
 optionalError : String -> Decoder (List String -> a) -> Decoder a
 optionalError fieldName =
     let
-        errorToString errorMessage =
-            String.join " " [ fieldName, errorMessage ]
+        errorToString errorAuthTokenssage =
+            String.join " " [ fieldName, errorAuthTokenssage ]
     in
     optional fieldName (Decode.list (Decode.map errorToString string)) []
 

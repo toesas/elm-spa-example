@@ -4,7 +4,7 @@ import Api
 import Article exposing (Article, Full)
 import Article.Body exposing (Body)
 import Article.Slug as Slug exposing (Slug)
-import AuthToken exposing (AuthToken, withAuthorization)
+import AuthToken exposing (AuthToken, addAuthHeader)
 import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (attribute, class, disabled, href, id, placeholder, type_, value)
@@ -13,7 +13,6 @@ import Http
 import HttpBuilder exposing (withBody, withExpect)
 import Json.Decode as Decode
 import Json.Encode as Encode
-import Me exposing (Me)
 import Page.Errored exposing (PageLoadError, pageLoadError)
 import Profile exposing (Profile)
 import Route
@@ -58,9 +57,9 @@ initNew =
     }
 
 
-initEdit : Maybe Me -> Slug -> Task PageLoadError Model
-initEdit maybeMe slug =
-    Article.fetch maybeMe slug
+initEdit : Maybe AuthToken -> Slug -> Task PageLoadError Model
+initEdit maybeToken slug =
+    Article.fetch maybeToken slug
         |> Http.toTask
         |> Task.mapError (\_ -> pageLoadError Page.Other "Article is currently unavailable.")
         |> Task.map
@@ -164,8 +163,8 @@ type Msg
     | CompletedEdit (Result Http.Error (Article Full))
 
 
-update : Me -> Nav.Key -> Msg -> Model -> ( Model, Cmd Msg )
-update me navKey msg model =
+update : AuthToken -> Nav.Key -> Msg -> Model -> ( Model, Cmd Msg )
+update authToken navKey msg model =
     case msg of
         ClickedSave ->
             case validate formValidator model.form of
@@ -173,11 +172,11 @@ update me navKey msg model =
                     ( { model | errors = [], isSaving = True }
                     , case model.editingArticle of
                         Nothing ->
-                            create validForm me
+                            create validForm authToken
                                 |> Http.send CompletedCreate
 
                         Just slug ->
-                            edit slug validForm me
+                            edit slug validForm authToken
                                 |> Http.send CompletedEdit
                     )
 
@@ -257,14 +256,14 @@ formValidator =
 -- HTTP
 
 
-create : Valid Form -> Me -> Http.Request (Article Full)
-create validForm me =
+create : Valid Form -> AuthToken -> Http.Request (Article Full)
+create validForm authToken =
     let
         form =
             fromValid validForm
 
         expect =
-            Article.fullDecoder (Just me)
+            Article.fullDecoder (Just authToken)
                 |> Decode.field "article"
                 |> Http.expectJson
 
@@ -282,7 +281,7 @@ create validForm me =
     in
     Api.url [ "articles" ]
         |> HttpBuilder.post
-        |> withAuthorization (Just (Me.authToken me))
+        |> addAuthHeader (Just authToken)
         |> withBody jsonBody
         |> withExpect expect
         |> HttpBuilder.toRequest
@@ -296,14 +295,14 @@ tagsFromString str =
         |> List.filter (not << String.isEmpty)
 
 
-edit : Slug -> Valid Form -> Me -> Http.Request (Article Full)
-edit articleSlug validForm me =
+edit : Slug -> Valid Form -> AuthToken -> Http.Request (Article Full)
+edit articleSlug validForm authToken =
     let
         form =
             fromValid validForm
 
         expect =
-            Article.fullDecoder (Just me)
+            Article.fullDecoder (Just authToken)
                 |> Decode.field "article"
                 |> Http.expectJson
 
@@ -320,7 +319,7 @@ edit articleSlug validForm me =
     in
     Article.url articleSlug []
         |> HttpBuilder.put
-        |> withAuthorization (Just (Me.authToken me))
+        |> addAuthHeader (Just authToken)
         |> withBody jsonBody
         |> withExpect expect
         |> HttpBuilder.toRequest

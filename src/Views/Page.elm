@@ -3,11 +3,11 @@ module Views.Page exposing (ActivePage(..), frame)
 {-| The frame around a typical page - that is, the header and footer.
 -}
 
+import AuthToken exposing (AuthToken)
 import Avatar exposing (Avatar)
 import Browser exposing (Document)
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Me exposing (Me)
 import Profile exposing (Profile)
 import Route exposing (Route)
 import Session exposing (LoggedInUser)
@@ -84,13 +84,17 @@ viewSignIn page loggedInUser =
             , linkTo Route.Register [ text "Sign up" ]
             ]
 
-        Just { me, profile } ->
+        Just { authToken, profile } ->
+            let
+                username =
+                    AuthToken.username authToken
+            in
             [ linkTo Route.NewArticle [ i [ class "ion-compose" ] [], text " New Post" ]
             , linkTo Route.Settings [ i [ class "ion-gear-a" ] [], text " Settings" ]
             , linkTo
-                (Route.Profile (Me.username me))
+                (Route.Profile username)
                 [ img [ class "user-pic", Avatar.src (Profile.avatar profile) ] []
-                , Username.toHtml (Me.username me)
+                , Username.toHtml username
                 ]
             , linkTo Route.Logout [ text "Sign out" ]
             ]

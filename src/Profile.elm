@@ -2,12 +2,12 @@ module Profile exposing (Profile, avatar, bio, decoder)
 
 {-| A user's profile - potentially your own!
 
-Contrast with Me, which is the currently signed-in user.
+Contrast with AuthToken, which is the currently signed-in user.
 
 -}
 
 import Api
-import AuthToken exposing (AuthToken, withAuthorization)
+import AuthToken exposing (AuthToken, addAuthHeader)
 import Avatar exposing (Avatar)
 import Http
 import HttpBuilder exposing (RequestBuilder, withExpect)
