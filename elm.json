@@ -16,7 +16,7 @@
             "elm/url": "1.0.0",
             "elm-explorations/markdown": "1.0.0",
             "lukewestby/elm-http-builder": "6.0.0",
-            "rtfeldman/elm-iso8601": "1.0.0",
+            "rtfeldman/elm-iso8601": "1.0.1",
             "rtfeldman/elm-validate": "4.0.0"
         },
         "indirect": {
